@@ -2,7 +2,7 @@
 import { GoogleGenAI, GenerateContentResponse, Type, Modality } from "@google/genai";
 import { storageService } from "./storageService";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
 
 // Helper functions for audio processing as per guidelines
 function decode(base64: string) {
@@ -133,7 +133,7 @@ export const geminiService = {
             }
             const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
             if (!videoUri) throw new Error("Video generation failed.");
-            return `${videoUri}&key=${process.env.API_KEY}`; 
+            return `${videoUri}&key=${import.meta.env.VITE_GEMINI_API_KEY}`; 
         } catch (error) { throw error; }
     },
 

@@ -5,23 +5,30 @@ import { ChatMessage } from '../types';
 
 export const AIChatBot: React.FC = () => {
     const [isOpen, setIsOpen] = useState(false);
-    const [messages, setMessages] = useState<ChatMessage[]>([
-        {
-            id: 'init',
-            role: 'model',
-            text: 'Hi there! 👋 I\'m your Recruitment AI Assistant. I can analyze resumes, map locations, or deep-reason through complex queries. How can I assist?',
-            timestamp: new Date()
-        }
-    ]);
+    const [messages, setMessages] = useState<ChatMessage[]>(() => {
+        const saved = localStorage.getItem('chat_history');
+        return saved ? JSON.parse(saved) : [
+            {
+                id: 'init',
+                role: 'model',
+                text: 'Hi there! 👋 I\'m your Recruitment AI Assistant. I can analyze resumes, map locations, or deep-reason through complex queries. How can I assist?',
+                timestamp: new Date()
+            }
+        ];
+    });
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [mode, setMode] = useState<'standard' | 'fast' | 'search' | 'pro' | 'maps'>('standard');
     const [isRecording, setIsRecording] = useState(false);
-    const [isPlaying, setIsPlaying] = useState<string | null>(null); // Message ID currently playing
+    const [isPlaying, setIsPlaying] = useState<string | null>(null);
     
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
+
+    useEffect(() => {
+        localStorage.setItem('chat_history', JSON.stringify(messages));
+    }, [messages]);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -35,7 +42,6 @@ export const AIChatBot: React.FC = () => {
         setInput(text);
     };
 
-    // Initialize Audio Context on user interaction if needed
     const getAudioContext = () => {
         if (!audioContextRef.current) {
             audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -61,7 +67,6 @@ export const AIChatBot: React.FC = () => {
                 reader.onloadend = async () => {
                     const base64Audio = reader.result as string;
                     setIsLoading(true);
-                    // Fixed: transcribeAudio now exists in geminiService
                     const transcription = await geminiService.transcribeAudio(base64Audio);
                     setIsLoading(false);
                     setInput(transcription);
@@ -80,21 +85,21 @@ export const AIChatBot: React.FC = () => {
         if (mediaRecorderRef.current && isRecording) {
             mediaRecorderRef.current.stop();
             setIsRecording(false);
-            // Stop all tracks
             mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
         }
     };
 
     const handleSpeak = async (messageId: string, text: string) => {
-        if (isPlaying) return; // Prevent overlapping playback
+        if (isPlaying) {
+            setIsPlaying(null);
+            return;
+        }
         setIsPlaying(messageId);
         
         try {
-            // Fixed: speak now exists in geminiService and returns raw PCM bytes as Uint8Array
             const audioBytes = await geminiService.speak(text);
             if (audioBytes) {
                 const ctx = getAudioContext();
-                // Fixed: Native decodeAudioData fails on raw PCM. Using custom helper from geminiService.
                 const decodedAudio = await decodeAudioData(audioBytes, ctx, 24000, 1);
                 const source = ctx.createBufferSource();
                 source.buffer = decodedAudio;
@@ -107,6 +112,17 @@ export const AIChatBot: React.FC = () => {
         } catch (error) {
             console.error("Playback error", error);
             setIsPlaying(null);
+        }
+    };
+
+    const handleClearChat = () => {
+        if (confirm("Clear chat history?")) {
+            setMessages([{
+                id: 'init',
+                role: 'model',
+                text: 'Hi there! 👋 I\'m your Recruitment AI Assistant. I can analyze resumes, map locations, or deep-reason through complex queries. How can I assist?',
+                timestamp: new Date()
+            }]);
         }
     };
 
@@ -140,11 +156,9 @@ export const AIChatBot: React.FC = () => {
                 responseText = result.text;
                 sources = result.sources;
             } else if (mode === 'pro') {
-                // Use Gemini 3 Pro with Thinking
                 isThinking = true;
                 responseText = await geminiService.proChat(userMsg.text);
             } else {
-                // Standard Flash
                 responseText = await geminiService.chat(userMsg.text);
             }
 
@@ -171,193 +185,207 @@ export const AIChatBot: React.FC = () => {
 
     return (
         <>
-            {/* Floating Trigger Button */}
             {!isOpen && (
                 <button
                     onClick={() => setIsOpen(true)}
-                    className="fixed bottom-8 right-8 h-16 w-16 bg-gradient-to-br from-liberty-blue to-liberty-light rounded-full shadow-[0_8px_30px_rgba(0,51,102,0.3)] flex items-center justify-center text-white hover:scale-110 transition-transform duration-300 z-50 group border-4 border-white dark:border-slate-800"
+                    className="fixed bottom-8 right-8 h-16 w-16 bg-gradient-to-br from-liberty-blue to-liberty-light rounded-full shadow-[0_8px_30px_rgba(0,51,102,0.4)] flex items-center justify-center text-white hover:scale-110 transition-all duration-300 z-50 group border-4 border-white dark:border-slate-800"
                 >
-                    <i className="fas fa-sparkles text-2xl group-hover:animate-pulse"></i>
+                    <i className="fas fa-sparkles text-2xl group-hover:rotate-12 transition-transform"></i>
                     <span className="absolute top-0 right-0 flex h-4 w-4">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-4 w-4 bg-green-400 border-2 border-white dark:border-slate-800"></span>
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-4 w-4 bg-blue-500 border-2 border-white dark:border-slate-800"></span>
                     </span>
+                    <div className="absolute right-full mr-4 bg-white dark:bg-slate-800 px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 shadow-xl opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-slate-100 dark:border-slate-700 pointer-events-none">
+                        Ask Gemini AI
+                    </div>
                 </button>
             )}
 
-            {/* Chat Interface */}
             {isOpen && (
-                <div className="fixed bottom-8 right-8 w-[400px] h-[650px] bg-white dark:bg-slate-800 rounded-3xl shadow-2xl flex flex-col z-50 overflow-hidden border border-slate-200/60 dark:border-slate-700 animate-fade-in-up font-sans">
-                    {/* Header */}
-                    <div className="bg-liberty-blue p-5 flex justify-between items-center text-white relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10"></div>
-                        <div className="flex items-center gap-3 relative z-10">
-                            <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                                <i className="fas fa-robot text-lg"></i>
-                            </div>
-                            <div>
-                                <h3 className="font-bold text-sm">Gemini Assistant</h3>
-                                <div className="flex items-center gap-1.5">
-                                    <span className="w-2 h-2 bg-green-400 rounded-full"></span>
-                                    <span className="text-[10px] text-blue-100 uppercase tracking-wider font-medium">Online</span>
+                <div className="fixed bottom-8 right-8 w-[420px] h-[700px] bg-white dark:bg-[#0B1120] rounded-[2.5rem] shadow-[0_20px_60px_rgba(0,0,0,0.3)] flex flex-col z-50 overflow-hidden border border-slate-200/60 dark:border-slate-800 animate-fade-in-up">
+                    {/* Premium Header */}
+                    <div className="bg-gradient-to-r from-liberty-blue to-liberty-light p-6 relative overflow-hidden shrink-0">
+                        <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-3xl -mr-20 -mt-20"></div>
+                        <div className="flex justify-between items-center relative z-10">
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-inner">
+                                    <i className="fas fa-brain text-white text-xl animate-pulse"></i>
+                                </div>
+                                <div>
+                                    <h3 className="font-serif font-bold text-white tracking-wide">Gemini Cognitive Co-Pilot</h3>
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse shadow-[0_0_5px_rgba(74,222,128,0.5)]"></div>
+                                        <span className="text-[10px] text-blue-100 uppercase tracking-widest font-black opacity-80">System Ready</span>
+                                    </div>
                                 </div>
                             </div>
+                            <div className="flex gap-2">
+                                <button onClick={handleClearChat} className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 transition-colors flex items-center justify-center text-white/70 hover:text-white" title="Clear History">
+                                    <i className="fas fa-trash-can text-xs"></i>
+                                </button>
+                                <button onClick={() => setIsOpen(false)} className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 transition-colors flex items-center justify-center text-white/70 hover:text-white">
+                                    <i className="fas fa-times"></i>
+                                </button>
+                            </div>
                         </div>
-                        <button onClick={() => setIsOpen(false)} className="hover:bg-white/20 w-8 h-8 rounded-full flex items-center justify-center transition-colors relative z-10">
-                            <i className="fas fa-times"></i>
-                        </button>
                     </div>
 
-                    {/* Mode Toggle Pills */}
-                    <div className="bg-slate-50/80 dark:bg-slate-800/80 backdrop-blur p-3 overflow-x-auto">
-                        <div className="flex gap-2 justify-start min-w-max px-2">
+                    {/* Logic Gates / Mode Toggles */}
+                    <div className="bg-slate-50/50 dark:bg-slate-900/50 backdrop-blur-md p-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
+                        <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
                             {[
-                                { id: 'standard', label: 'Chat', icon: 'fa-comment' },
-                                { id: 'fast', label: 'Fast', icon: 'fa-bolt' },
-                                { id: 'search', label: 'Search', icon: 'fa-globe' },
-                                { id: 'maps', label: 'Maps', icon: 'fa-map-location-dot' },
-                                { id: 'pro', label: 'Think', icon: 'fa-brain' }
+                                { id: 'standard', label: 'Inquiry', icon: 'fa-comment-dots', color: 'blue' },
+                                { id: 'fast', label: 'Turbo', icon: 'fa-bolt-lightning', color: 'amber' },
+                                { id: 'pro', label: 'Thinking', icon: 'fa-microchip', color: 'purple' },
+                                { id: 'search', label: 'Web', icon: 'fa-globe', color: 'sky' },
+                                { id: 'maps', label: 'Geo', icon: 'fa-location-dot', color: 'emerald' }
                             ].map((m: any) => (
                                 <button
                                     key={m.id}
                                     onClick={() => setMode(m.id)}
-                                    className={`px-4 py-1.5 text-xs font-bold rounded-full flex items-center gap-2 transition-all ${
+                                    className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl flex items-center gap-2 transition-all shrink-0 border ${
                                         mode === m.id 
-                                            ? 'bg-liberty-blue text-white shadow-md transform scale-105' 
-                                            : 'bg-white dark:bg-slate-700 text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600'
+                                            ? 'bg-liberty-blue border-liberty-blue text-white shadow-lg shadow-blue-900/20' 
+                                            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 hover:border-slate-300 dark:hover:border-slate-600'
                                     }`}
                                 >
-                                    <i className={`fas ${m.icon} ${mode === m.id ? 'text-blue-300' : 'text-slate-400'}`}></i> {m.label}
+                                    <i className={`fas ${m.icon} ${mode === m.id ? 'text-white' : ''}`}></i>
+                                    {m.label}
                                 </button>
                             ))}
                         </div>
                     </div>
 
-                    {/* Messages Area */}
-                    <div className="flex-1 overflow-y-auto p-5 space-y-5 bg-slate-50 dark:bg-slate-900/50">
+                    {/* Neural Net / Messages View */}
+                    <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-slate-50/30 dark:bg-slate-900/20">
                         {messages.map((msg) => (
                             <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in-up`}>
                                 {msg.role === 'model' && (
-                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-liberty-blue to-liberty-light flex items-center justify-center text-white text-xs shrink-0 mr-2 mt-1 shadow-sm">
+                                    <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-indigo-500 to-liberty-blue flex items-center justify-center text-white text-xs shrink-0 mr-3 mt-1 shadow-md border border-white/20">
                                         <i className="fas fa-robot"></i>
                                     </div>
                                 )}
-                                <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm shadow-sm relative group ${
+                                <div className={`group relative max-w-[85%] rounded-[2rem] px-5 py-4 text-sm transition-all duration-300 ${
                                     msg.role === 'user' 
-                                        ? 'bg-liberty-blue text-white rounded-br-none' 
-                                        : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-bl-none border border-slate-200/60 dark:border-slate-600'
+                                        ? 'bg-liberty-blue text-white rounded-br-none shadow-xl shadow-blue-900/10' 
+                                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-bl-none border border-slate-100 dark:border-slate-800 shadow-sm'
                                 }`}>
                                     {msg.isThinking && (
-                                        <div className="text-xs text-purple-600 dark:text-purple-400 mb-2 font-bold uppercase tracking-wider flex items-center gap-1.5 border-b border-purple-100 dark:border-purple-900 pb-1">
-                                            <i className="fas fa-brain animate-pulse"></i> Deep Reasoning
+                                        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-indigo-50 dark:border-indigo-900/30">
+                                            <div className="w-2 h-2 bg-purple-500 rounded-full animate-ping"></div>
+                                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-purple-600 dark:text-purple-400">Cognitive Reasoning active</span>
                                         </div>
                                     )}
-                                    <div className="whitespace-pre-wrap leading-relaxed">{msg.text}</div>
+                                    <div className="whitespace-pre-wrap leading-relaxed font-light">{msg.text}</div>
                                     
-                                    {/* Sources Display (Search or Maps) */}
                                     {msg.sources && msg.sources.length > 0 && (
-                                        <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-600">
-                                            <p className="text-[9px] font-bold text-slate-400 dark:text-slate-500 mb-1.5 uppercase tracking-wider flex items-center gap-1">
-                                                <i className="fas fa-check-circle text-green-500"></i> Grounded Sources
+                                        <div className="mt-4 pt-3 border-t border-slate-50 dark:border-slate-700/50">
+                                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                                <i className="fas fa-link text-indigo-400"></i> Referenced Knowledge
                                             </p>
-                                            <ul className="space-y-1.5">
+                                            <div className="grid gap-2">
                                                 {msg.sources.map((source, idx) => (
-                                                    <li key={idx}>
-                                                        <a href={source.uri} target="_blank" rel="noreferrer" className="flex items-center gap-2 p-1.5 bg-slate-50 dark:bg-slate-600 rounded hover:bg-blue-50 dark:hover:bg-slate-500 transition-colors group text-xs text-slate-600 dark:text-slate-300 border border-slate-100 dark:border-slate-500/50">
-                                                            <div className="w-4 h-4 bg-white dark:bg-slate-500 rounded flex items-center justify-center shadow-sm text-[8px] text-blue-500 dark:text-blue-300 font-bold border border-slate-100 dark:border-slate-400">
-                                                                {idx + 1}
-                                                            </div>
-                                                            <span className="truncate flex-1 group-hover:text-blue-600 dark:group-hover:text-blue-300 font-medium">{source.title || 'Source Link'}</span>
-                                                            <i className="fas fa-external-link-alt text-[9px] text-slate-300 dark:text-slate-400 group-hover:text-blue-400"></i>
-                                                        </a>
-                                                    </li>
+                                                    <a key={idx} href={source.uri} target="_blank" rel="noreferrer" className="flex items-center gap-3 p-2 bg-slate-50 dark:bg-slate-900/50 rounded-xl hover:bg-white dark:hover:bg-slate-700 transition-all border border-transparent hover:border-slate-100 dark:hover:border-slate-600 group">
+                                                        <span className="w-5 h-5 bg-white dark:bg-slate-800 rounded-lg flex items-center justify-center text-[8px] font-black text-indigo-500 shadow-sm border border-slate-100 dark:border-slate-700">{idx + 1}</span>
+                                                        <span className="truncate flex-1 text-xs font-medium group-hover:text-liberty-blue transition-colors">{source.title || 'Knowledge Base'}</span>
+                                                        <i className="fas fa-chevron-right text-[8px] text-slate-300 opacity-0 group-hover:opacity-100 transition-all"></i>
+                                                    </a>
                                                 ))}
-                                            </ul>
+                                            </div>
                                         </div>
                                     )}
 
-                                    {/* TTS Button for Model Messages */}
                                     {msg.role === 'model' && (
                                         <button 
                                             onClick={() => handleSpeak(msg.id, msg.text)}
-                                            className={`absolute -right-8 bottom-0 p-2 text-slate-400 hover:text-liberty-blue transition-colors ${isPlaying === msg.id ? 'text-liberty-blue animate-pulse' : ''}`}
-                                            title="Read Aloud"
+                                            className={`absolute -right-10 bottom-2 w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                                                isPlaying === msg.id 
+                                                    ? 'bg-blue-100 text-blue-600 animate-pulse' 
+                                                    : 'text-slate-300 hover:text-liberty-blue hover:bg-slate-100 dark:hover:bg-slate-800'
+                                            }`}
                                         >
-                                            <i className={`fas ${isPlaying === msg.id ? 'fa-stop-circle' : 'fa-volume-up'}`}></i>
+                                            <i className={`fas ${isPlaying === msg.id ? 'fa-stop' : 'fa-volume-high'} text-[10px]`}></i>
                                         </button>
                                     )}
                                 </div>
                             </div>
                         ))}
                         {isLoading && (
-                            <div className="flex justify-start">
-                                <div className="w-8 h-8 rounded-full bg-liberty-blue flex items-center justify-center text-white text-xs shrink-0 mr-2 shadow-sm">
+                            <div className="flex justify-start animate-pulse">
+                                <div className="w-9 h-9 rounded-2xl bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-slate-400 shrink-0 mr-3 mt-1 shadow-sm">
                                     <i className="fas fa-robot"></i>
                                 </div>
-                                <div className="bg-white dark:bg-slate-700 rounded-2xl rounded-bl-none px-4 py-3 shadow-sm border border-slate-200 dark:border-slate-600">
+                                <div className="bg-white dark:bg-slate-800 rounded-2xl rounded-bl-none px-6 py-4 shadow-sm border border-slate-100 dark:border-slate-800">
                                     <div className="flex gap-1.5">
-                                        <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"></div>
-                                        <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce delay-100"></div>
-                                        <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce delay-200"></div>
+                                        <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"></div>
+                                        <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                                        <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
                                     </div>
-                                    {mode === 'pro' && <div className="text-[10px] text-purple-400 mt-1 font-medium animate-pulse">Thinking...</div>}
                                 </div>
                             </div>
                         )}
                         <div ref={messagesEndRef} />
                     </div>
 
-                    {/* Suggestions (Only if chat is empty-ish) */}
+                    {/* Prompt Intelligence (Suggestions) */}
                     {messages.length < 3 && !isLoading && (
-                        <div className="px-5 pb-2 bg-slate-50 dark:bg-slate-900/50">
-                            <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2">
-                                {['Draft outreach email', 'Map nearby offices', 'Screen candidate with deep thinking'].map(s => (
+                        <div className="px-6 py-4 bg-slate-50/50 dark:bg-slate-900/50 shrink-0">
+                            <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+                                {[
+                                    { text: 'Draft outreach', icon: 'fa-paper-plane' },
+                                    { text: 'Analyze fit', icon: 'fa-brain' },
+                                    { text: 'Map talent', icon: 'fa-location-dot' }
+                                ].map(s => (
                                     <button 
-                                        key={s} 
-                                        onClick={() => handleSuggestion(s)}
-                                        className="whitespace-nowrap px-3 py-1.5 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-full text-xs text-slate-600 dark:text-slate-300 hover:border-liberty-blue hover:text-liberty-blue dark:hover:text-blue-400 transition-colors shadow-sm"
+                                        key={s.text} 
+                                        onClick={() => handleSuggestion(s.text)}
+                                        className="whitespace-nowrap px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 hover:border-liberty-blue hover:text-liberty-blue dark:hover:text-blue-400 transition-all shadow-sm"
                                     >
-                                        {s}
+                                        <i className={`fas ${s.icon} mr-2 opacity-50`}></i> {s.text}
                                     </button>
                                 ))}
                             </div>
                         </div>
                     )}
 
-                    {/* Input Area */}
-                    <form onSubmit={handleSubmit} className="p-4 bg-white dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700">
-                        <div className="relative flex items-center gap-2">
-                            <button 
-                                type="button" 
-                                onClick={isRecording ? handleStopRecording : handleStartRecording}
-                                className={`p-2 rounded-lg transition-colors ${
-                                    isRecording ? 'text-red-500 bg-red-50 animate-pulse' : 'text-slate-400 hover:text-liberty-blue dark:hover:text-blue-400'
-                                }`}
-                                title={isRecording ? "Stop Recording" : "Record Audio"}
-                            >
-                                <i className={`fas ${isRecording ? 'fa-stop-circle' : 'fa-microphone'}`}></i>
-                            </button>
-                            <button type="button" className="p-2 text-slate-400 hover:text-liberty-blue dark:hover:text-blue-400 transition-colors">
-                                <i className="fas fa-paperclip"></i>
-                            </button>
+                    {/* Executive Input Terminal */}
+                    <form onSubmit={handleSubmit} className="p-6 bg-white dark:bg-[#0B1120] border-t border-slate-100 dark:border-slate-800 shrink-0">
+                        <div className="relative flex items-center gap-3">
+                            <div className="flex items-center gap-1">
+                                <button 
+                                    type="button" 
+                                    onClick={isRecording ? handleStopRecording : handleStartRecording}
+                                    className={`w-10 h-10 rounded-xl transition-all flex items-center justify-center ${
+                                        isRecording 
+                                            ? 'bg-rose-500 text-white animate-pulse shadow-lg shadow-rose-900/20' 
+                                            : 'bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-liberty-blue dark:hover:text-blue-400'
+                                    }`}
+                                    title={isRecording ? "Terminate Recording" : "Initialize Voice Capture"}
+                                >
+                                    <i className={`fas ${isRecording ? 'fa-square' : 'fa-microphone'}`}></i>
+                                </button>
+                                <button type="button" className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-liberty-blue transition-colors flex items-center justify-center">
+                                    <i className="fas fa-plus-circle"></i>
+                                </button>
+                            </div>
                             <input
                                 type="text"
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
-                                placeholder={isRecording ? "Listening..." : mode === 'maps' ? "Find location..." : "Ask Gemini..."}
-                                className="flex-1 bg-slate-50 dark:bg-slate-700 border-0 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-liberty-blue/20 dark:focus:ring-blue-500/20 text-slate-800 dark:text-white placeholder:text-slate-400 font-medium"
+                                placeholder={isRecording ? "Neural stream active..." : "Query Gemini Collective..."}
+                                className="flex-1 bg-slate-50 dark:bg-slate-800 border-0 rounded-2xl px-5 py-3.5 text-sm focus:ring-2 focus:ring-liberty-blue/10 dark:focus:ring-blue-500/10 text-slate-800 dark:text-white placeholder:text-slate-400 font-medium transition-all"
                                 disabled={isRecording}
                             />
                             <button 
                                 type="submit" 
                                 disabled={!input.trim() || isLoading || isRecording}
-                                className={`h-10 w-10 text-white rounded-xl flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg active:scale-95 ${
-                                    mode === 'pro' ? 'bg-gradient-to-r from-purple-600 to-indigo-600' : 
-                                    mode === 'maps' ? 'bg-gradient-to-r from-green-500 to-teal-500' :
-                                    'bg-liberty-blue hover:bg-liberty-light'
+                                className={`h-12 w-12 rounded-2xl flex items-center justify-center text-white transition-all shadow-xl active:scale-95 disabled:opacity-50 ${
+                                    mode === 'pro' ? 'bg-gradient-to-br from-purple-600 to-indigo-600 shadow-purple-900/20' : 
+                                    mode === 'maps' ? 'bg-gradient-to-br from-emerald-500 to-teal-500 shadow-emerald-900/20' :
+                                    'bg-liberty-blue hover:bg-liberty-light shadow-blue-900/20'
                                 }`}
                             >
-                                <i className={`fas ${mode === 'pro' ? 'fa-brain' : 'fa-paper-plane'} text-xs`}></i>
+                                <i className={`fas ${isLoading ? 'fa-circle-notch fa-spin' : mode === 'pro' ? 'fa-microchip' : 'fa-arrow-right'} text-sm`}></i>
                             </button>
                         </div>
                     </form>
