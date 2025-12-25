@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { AppView, Request, Submission, Client, UserRole, Activity, Candidate } from '../types';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area, LineChart, Line, CartesianGrid, Legend, Cell, PieChart, Pie } from 'recharts';
+import { AppView, Request, Submission, Client, UserRole, Activity, Candidate, UserAccount } from '../types';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area, CartesianGrid, Cell } from 'recharts';
 import { geminiService } from '../services/geminiService';
 import { ReportModal } from './ReportModal';
 import { AdminSystemConfig } from './AdminSystemConfig';
@@ -16,9 +16,15 @@ interface PartnerDashboardProps {
     submissions: Submission[];
     activities: Activity[];
     currentView?: AppView;
+    // New Props for Auth Management
+    allUsers: UserAccount[];
+    setAllUsers: (users: UserAccount[]) => void;
 }
 
-export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ setView, onSelectRequest, requests, candidates, submissions, activities, currentView }) => {
+export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ 
+    setView, onSelectRequest, requests, candidates, submissions, activities, currentView,
+    allUsers, setAllUsers
+}) => {
     
     // View Routing
     const showSecurity = currentView === AppView.ADMIN_SECURITY;
@@ -29,13 +35,12 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ setView, onS
     const showPerformance = currentView === AppView.ADMIN_PERFORMANCE;
     const showOverview = !showSecurity && !showCosts && !showUsers && !showClients && !showEngagement && !showPerformance;
 
-    // -- Accurate KPI Calculations --
+    // -- Calculations --
     const uptime = "99.98%";
-    const activeTenants = 1; // Base tenant is always active
     const openRoles = requests.filter(r => r.status !== 'filled').length;
     const totalSubmissions = submissions.length;
 
-    // -- Usage & Costs (Estimated Live) --
+    // -- Usage & Costs --
     const [aiUsage, setAiUsage] = useState(() => storageService.load('ai_usage', { flash: 0, pro: 0, veo: 0 }));
     
     useEffect(() => {
@@ -46,7 +51,6 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ setView, onS
     }, []);
 
     const estimatedBill = useMemo(() => {
-        // Mocked pricing: Flash $0.01, Pro $0.05, Veo $0.50
         return (aiUsage.flash * 0.01 + aiUsage.pro * 0.05 + aiUsage.veo * 0.50).toFixed(2);
     }, [aiUsage]);
 
@@ -58,7 +62,6 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ setView, onS
 
     // -- Live Tracking --
     const [livePoints, setLivePoints] = useState(Array.from({ length: 20 }, (_, i) => ({ time: i, load: 10 + Math.random() * 10 })));
-    const messagesEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         const interval = setInterval(() => {
@@ -100,7 +103,7 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ setView, onS
                         <i className="fas fa-shield-halved"></i> Global Administrator
                     </div>
                     <h1 className="text-4xl font-serif font-bold text-white tracking-tight flex items-center gap-3">
-                        {showEngagement ? 'Live Operations' : 
+                        {showUsers ? 'Identity Governance' : 
                          showSecurity ? 'Security Center' : 
                          showCosts ? 'Financial Overview' :
                          showClients ? 'Client Management' :
@@ -108,7 +111,7 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ setView, onS
                          {showEngagement && <span className="w-3 h-3 rounded-full bg-red-500 animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.6)]"></span>}
                     </h1>
                     <p className="text-slate-400 mt-2 font-medium max-w-2xl">
-                        Monitoring {requests.length} searches and {candidates.length} candidate artifacts.
+                        Monitoring {allUsers.length} system users and global cloud consumption.
                     </p>
                 </div>
                 <div className="flex gap-3">
@@ -128,16 +131,14 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ setView, onS
 
             {showOverview && (
                 <div className="space-y-8">
-                    {/* Real KPIs */}
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                         <StatItem label="System Uptime" value={uptime} icon="fa-server" color="text-green-400" />
                         <StatItem label="API Health" value="Nominal" icon="fa-bolt" color="text-blue-400" />
-                        <StatItem label="Active Roles" value={openRoles} icon="fa-briefcase" color="text-purple-400" />
-                        <StatItem label="Total Submissions" value={totalSubmissions} icon="fa-user-check" color="text-emerald-400" />
+                        <StatItem label="System Users" value={allUsers.length} icon="fa-users" color="text-purple-400" />
+                        <StatItem label="Cloud Cost" value={`$${estimatedBill}`} icon="fa-cloud" color="text-emerald-400" />
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        {/* Traffic Map Simulation */}
                         <div className="lg:col-span-2 bg-[#0B1120] p-8 rounded-[2.5rem] border border-white/5 shadow-sm min-h-[400px] flex flex-col">
                             <h3 className="font-bold text-xl text-white mb-6">Infrastructure Performance</h3>
                             <div className="flex-1 w-full">
@@ -152,21 +153,42 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ setView, onS
                             </div>
                         </div>
 
-                        {/* Financial Projection */}
                         <div className="bg-[#0B1120] p-8 rounded-[2.5rem] border border-white/5 shadow-sm flex flex-col">
-                            <h3 className="font-bold text-xl text-white mb-2">Revenue Analysis</h3>
-                            <div className="flex-1 flex flex-col justify-center items-center text-center">
-                                <div className="text-5xl font-black text-white mb-2">R {estimatedBill}</div>
-                                <p className="text-xs text-slate-500 uppercase font-bold tracking-widest">Est. API Consumption</p>
+                            <h3 className="font-bold text-xl text-white mb-6">Quick Actions</h3>
+                            <div className="space-y-3 flex-1">
+                                <button onClick={() => setView && setView(AppView.ADMIN_USERS)} className="w-full p-4 bg-white/5 hover:bg-white/10 rounded-2xl flex items-center justify-between transition-all border border-white/5 group">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-blue-900/30 text-blue-400 flex items-center justify-center">
+                                            <i className="fas fa-user-plus"></i>
+                                        </div>
+                                        <div className="text-left">
+                                            <div className="text-sm font-bold text-white">Create Account</div>
+                                            <div className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Assign Roles</div>
+                                        </div>
+                                    </div>
+                                    <i className="fas fa-chevron-right text-slate-600 group-hover:text-blue-400 transition-colors"></i>
+                                </button>
+                                <button onClick={() => setView && setView(AppView.ADMIN_SECURITY)} className="w-full p-4 bg-white/5 hover:bg-white/10 rounded-2xl flex items-center justify-between transition-all border border-white/5 group">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-purple-900/30 text-purple-400 flex items-center justify-center">
+                                            <i className="fas fa-key"></i>
+                                        </div>
+                                        <div className="text-left">
+                                            <div className="text-sm font-bold text-white">Security Audit</div>
+                                            <div className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Credential Scan</div>
+                                        </div>
+                                    </div>
+                                    <i className="fas fa-chevron-right text-slate-600 group-hover:text-purple-400 transition-colors"></i>
+                                </button>
                             </div>
-                            <button onClick={() => setView && setView(AppView.ADMIN_COSTS)} className="w-full py-3 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold text-white transition-colors border border-white/5">
-                                View Billing Cycles
-                            </button>
                         </div>
                     </div>
                 </div>
             )}
 
+            {showUsers && <AdminUserManagement users={allUsers} setUsers={setAllUsers} />}
+            {showPerformance && <AdminSystemConfig />}
+            
             {showCosts && (
                 <div className="space-y-8 animate-fade-in">
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -214,7 +236,6 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ setView, onS
                         )) : (
                             <div className="text-slate-500 italic py-10 text-center">Awaiting platform events...</div>
                         )}
-                        <div ref={messagesEndRef} />
                     </div>
                 </div>
             )}

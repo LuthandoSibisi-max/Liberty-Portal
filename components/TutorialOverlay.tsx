@@ -33,7 +33,7 @@ export const TutorialOverlay: React.FC = () => {
     const tutorialSteps = [
         {
             title: "Welcome to My Next Opportunity",
-            desc: "Your intelligent enterprise recruitment portal powered by Liberty FA. Let's take a quick tour.",
+            desc: "Your intelligent enterprise recruitment portal powered by MNO Hub. Let's take a quick tour.",
             icon: "fa-door-open",
             color: "text-blue-500"
         },

@@ -78,6 +78,9 @@ export const RequestDetail: React.FC<RequestDetailProps> = ({
     const [marketAnalysis, setMarketAnalysis] = useState<{text: string, sources?: any[]} | null>(null);
     const [isAnalyzingMarket, setIsAnalyzingMarket] = useState(false);
 
+    // Edit form state
+    const [editFormData, setEditFormData] = useState<Partial<Request>>({});
+
     const chatContainerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -85,6 +88,12 @@ export const RequestDetail: React.FC<RequestDetailProps> = ({
             chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
         }
     }, [comments, isPartnerTyping]);
+
+    useEffect(() => {
+        if (request) {
+            setEditFormData({ ...request });
+        }
+    }, [request, isEditing]);
 
     if (!request) {
         return (
@@ -121,10 +130,18 @@ export const RequestDetail: React.FC<RequestDetailProps> = ({
         }
     };
 
+    const handleSaveEdit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (onUpdateRequest && request) {
+            onUpdateRequest(request.id, editFormData);
+            setIsEditing(false);
+        }
+    };
+
     return (
         <div className="h-full flex flex-col bg-slate-50/50 dark:bg-slate-900/50 animate-fade-in-up">
             {/* Header */}
-            <div className="bg-white dark:bg-slate-800 border-b border-slate-200 px-6 py-4 flex-none sticky top-0 z-20">
+            <div className="bg-white dark:bg-slate-800 border-b border-slate-200 px-6 py-4 flex-none sticky top-0 z-20 transition-colors duration-300">
                 <div className="flex items-center gap-2 text-sm text-slate-500 mb-2">
                     <button onClick={onBack} className="hover:text-blue-600 transition-colors flex items-center gap-1 font-medium">
                         <i className="fas fa-arrow-left"></i> Back
@@ -139,7 +156,11 @@ export const RequestDetail: React.FC<RequestDetailProps> = ({
                     </div>
                     
                     <div className="flex items-center gap-3">
-                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase bg-blue-50 text-blue-600 border border-blue-100`}>
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase ${
+                            request.status === 'open' || request.status === 'in-progress' 
+                            ? 'bg-green-50 text-green-600 border border-green-100' 
+                            : 'bg-slate-50 text-slate-500 border border-slate-100 dark:bg-slate-700 dark:text-slate-300 dark:border-slate-600'
+                        }`}>
                             {request.status}
                         </span>
                         
@@ -147,7 +168,7 @@ export const RequestDetail: React.FC<RequestDetailProps> = ({
                         <div className="relative">
                             <button 
                                 onClick={() => setIsManageMenuOpen(!isManageMenuOpen)}
-                                className="px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-white rounded-xl text-sm font-bold hover:bg-slate-200 transition-all flex items-center gap-2"
+                                className="px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-white rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-600 transition-all flex items-center gap-2"
                             >
                                 <i className="fas fa-ellipsis-h"></i> Manage
                             </button>
@@ -155,17 +176,17 @@ export const RequestDetail: React.FC<RequestDetailProps> = ({
                             {isManageMenuOpen && (
                                 <>
                                     <div className="fixed inset-0 z-10" onClick={() => setIsManageMenuOpen(false)}></div>
-                                    <div className="absolute right-0 top-full mt-2 w-52 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 z-20 overflow-hidden animate-fade-in-up">
-                                        <button onClick={() => { setIsEditing(true); setIsManageMenuOpen(false); }} className="w-full text-left px-4 py-3 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2">
+                                    <div className="absolute right-0 top-full mt-2 w-52 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 z-20 overflow-hidden animate-fade-in-up">
+                                        <button onClick={() => { setIsEditing(true); setIsManageMenuOpen(false); }} className="w-full text-left px-4 py-3 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 dark:text-white">
                                             <i className="fas fa-edit text-blue-500"></i> Edit Request
                                         </button>
-                                        <button className="w-full text-left px-4 py-3 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2">
+                                        <button className="w-full text-left px-4 py-3 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 dark:text-white">
                                             <i className="fas fa-pause text-amber-500"></i> Put on Hold
                                         </button>
-                                        <div className="h-px bg-slate-100"></div>
+                                        <div className="h-px bg-slate-100 dark:bg-slate-700"></div>
                                         <button 
                                             onClick={handleDelete}
-                                            className="w-full text-left px-4 py-3 text-sm font-bold text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                            className="w-full text-left px-4 py-3 text-sm font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
                                         >
                                             <i className="fas fa-trash-alt"></i> DELETE REQUEST
                                         </button>
@@ -190,15 +211,15 @@ export const RequestDetail: React.FC<RequestDetailProps> = ({
             {/* Content Split */}
             <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 space-y-6">
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 overflow-hidden flex flex-col h-full min-h-[500px]">
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-full min-h-[500px] transition-colors duration-300">
                         <div className="flex border-b border-slate-100 dark:border-slate-700">
-                            <button onClick={() => setActiveTab('overview')} className={`px-6 py-4 text-sm font-bold border-b-2 transition-colors ${activeTab === 'overview' ? 'border-liberty-blue text-liberty-blue dark:text-blue-400' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+                            <button onClick={() => setActiveTab('overview')} className={`px-6 py-4 text-sm font-bold border-b-2 transition-colors ${activeTab === 'overview' ? 'border-liberty-blue text-liberty-blue dark:text-blue-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}>
                                 Overview
                             </button>
-                            <button onClick={() => setActiveTab('candidates')} className={`px-6 py-4 text-sm font-bold border-b-2 transition-colors ${activeTab === 'candidates' ? 'border-liberty-blue text-liberty-blue dark:text-blue-400' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+                            <button onClick={() => setActiveTab('candidates')} className={`px-6 py-4 text-sm font-bold border-b-2 transition-colors ${activeTab === 'candidates' ? 'border-liberty-blue text-liberty-blue dark:text-blue-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}>
                                 Candidates ({relatedCandidates.length})
                             </button>
-                            <button onClick={() => setActiveTab('market')} className={`px-6 py-4 text-sm font-bold border-b-2 transition-colors ${activeTab === 'market' ? 'border-purple-600 text-purple-600 dark:text-purple-400' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+                            <button onClick={() => setActiveTab('market')} className={`px-6 py-4 text-sm font-bold border-b-2 transition-colors ${activeTab === 'market' ? 'border-purple-600 text-purple-600 dark:text-purple-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}>
                                 Market Intelligence
                             </button>
                         </div>
@@ -267,7 +288,7 @@ export const RequestDetail: React.FC<RequestDetailProps> = ({
                             )}
 
                             {activeTab === 'candidates' && (
-                                <div className="divide-y divide-slate-50 dark:divide-slate-700">
+                                <div className="divide-y divide-slate-50 dark:divide-slate-700 transition-colors duration-300">
                                     {relatedCandidates.map(c => <CandidateListItem key={c.id} cand={c} onDiscuss={(n) => setCommentInput(`@${n} `)} />)}
                                     {relatedCandidates.length === 0 && (
                                         <div className="py-20 text-center text-slate-400">
@@ -279,7 +300,7 @@ export const RequestDetail: React.FC<RequestDetailProps> = ({
                             )}
 
                             {activeTab === 'market' && (
-                                <div className="p-6">
+                                <div className="p-6 transition-colors duration-300">
                                     {!marketAnalysis && !isAnalyzingMarket ? (
                                         <div className="text-center py-20 flex flex-col items-center">
                                             <div className="w-16 h-16 bg-purple-50 dark:bg-purple-900/20 rounded-full flex items-center justify-center mb-4">
@@ -325,15 +346,15 @@ export const RequestDetail: React.FC<RequestDetailProps> = ({
                 </div>
 
                 {/* Sidebar - Collaboration Hub */}
-                <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 flex flex-col h-[600px] shadow-sm">
-                    <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-800/80">
+                <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 flex flex-col h-[600px] shadow-sm transition-colors duration-300">
+                    <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-800/80 transition-colors duration-300">
                         <h3 className="font-bold text-sm text-slate-800 dark:text-white">Collaboration Hub</h3>
                         <div className="flex items-center gap-2">
                             <span className="text-[10px] font-bold text-slate-400 uppercase">Live</span>
                             <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
                         </div>
                     </div>
-                    <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-slate-50/50 dark:bg-slate-900/50" ref={chatContainerRef}>
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-slate-50/50 dark:bg-slate-900/50 transition-colors duration-300" ref={chatContainerRef}>
                         {comments.map(c => (
                             <div key={c.id} className={`flex flex-col ${c.role === userRole ? 'items-end' : 'items-start'}`}>
                                 <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-xs shadow-sm ${
@@ -356,7 +377,7 @@ export const RequestDetail: React.FC<RequestDetailProps> = ({
                             </div>
                         )}
                     </div>
-                    <div className="p-4 border-t border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800">
+                    <div className="p-4 border-t border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 transition-colors duration-300">
                         <form onSubmit={handlePostComment} className="flex gap-2">
                             <input 
                                 type="text" 
@@ -372,6 +393,78 @@ export const RequestDetail: React.FC<RequestDetailProps> = ({
                     </div>
                 </div>
             </div>
+
+            {/* Edit Request Modal */}
+            {isEditing && (
+                <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white dark:bg-[#0B1120] rounded-[2.5rem] w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl border border-slate-200 dark:border-slate-800">
+                        <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/20">
+                            <h3 className="text-2xl font-serif font-bold text-slate-800 dark:text-white flex items-center gap-3">
+                                <i className="fas fa-edit text-blue-500"></i> Edit Request
+                            </h3>
+                            <button onClick={() => setIsEditing(false)} className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-white p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
+                                <i className="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <form onSubmit={handleSaveEdit} className="p-8 space-y-6 overflow-y-auto custom-scrollbar">
+                            <div className="grid grid-cols-2 gap-6">
+                                <div className="space-y-1.5">
+                                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Job Title</label>
+                                    <input 
+                                        required value={editFormData.title || ''} onChange={e => setEditFormData({...editFormData, title: e.target.value})}
+                                        className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-800 dark:text-white text-sm focus:border-blue-500 outline-none transition-all"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Department</label>
+                                    <input 
+                                        required value={editFormData.department || ''} onChange={e => setEditFormData({...editFormData, department: e.target.value})}
+                                        className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-800 dark:text-white text-sm focus:border-blue-500 outline-none transition-all"
+                                    />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-6">
+                                <div className="space-y-1.5">
+                                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Location</label>
+                                    <input 
+                                        required value={editFormData.location || ''} onChange={e => setEditFormData({...editFormData, location: e.target.value})}
+                                        className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-800 dark:text-white text-sm focus:border-blue-500 outline-none transition-all"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Target Hires</label>
+                                    <input 
+                                        type="number" required value={editFormData.targetHires || 1} onChange={e => setEditFormData({...editFormData, targetHires: parseInt(e.target.value) || 1})}
+                                        className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-800 dark:text-white text-sm focus:border-blue-500 outline-none transition-all"
+                                    />
+                                </div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Description</label>
+                                <textarea 
+                                    required value={editFormData.description || ''} onChange={e => setEditFormData({...editFormData, description: e.target.value})}
+                                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 text-slate-800 dark:text-white text-sm focus:border-blue-500 outline-none h-32 resize-none transition-all"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Requirements</label>
+                                <textarea 
+                                    required value={editFormData.requirements || ''} onChange={e => setEditFormData({...editFormData, requirements: e.target.value})}
+                                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 text-slate-800 dark:text-white text-sm focus:border-blue-500 outline-none h-32 resize-none transition-all"
+                                />
+                            </div>
+                            <div className="pt-6 flex gap-4">
+                                <button type="button" onClick={() => setIsEditing(false)} className="flex-1 py-4 px-6 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all uppercase text-xs tracking-widest">
+                                    Discard Changes
+                                </button>
+                                <button type="submit" className="flex-1 py-4 px-6 rounded-xl bg-liberty-blue text-white font-bold hover:bg-liberty-light transition-all shadow-lg uppercase text-xs tracking-widest">
+                                    Save Request
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
 
             {isSubmitModalOpen && (
                 <SubmitCandidateModal 

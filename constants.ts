@@ -1,7 +1,7 @@
 
 import { TalentProfile, UserRole, Client, UserAccount, SystemSettings } from './types';
 
-// STATIC ASSETS - Preserved as the foundational network
+// STATIC ASSETS
 export const MOCK_TALENT_POOL: TalentProfile[] = [
     {
         id: 'TP-1',
@@ -25,7 +25,6 @@ export const MOCK_TALENT_POOL: TalentProfile[] = [
     }
 ];
 
-// DYNAMIC CONFIGS
 export const MOCK_CLIENTS: Client[] = [
     {
         id: 'cli-001',
@@ -42,16 +41,42 @@ export const MOCK_CLIENTS: Client[] = [
     }
 ];
 
+// UPDATED CREDENTIALS PER USER REQUEST
 export const MOCK_USERS: UserAccount[] = [
     {
-        id: 'u-1',
-        name: 'Luthando Sibisi',
-        email: 'luthando@mynextopp.co.za',
+        id: 'u-admin',
+        name: 'Luthando Sibisi (Admin)',
+        email: 'luthando@my-next-opportunity.careers',
+        password: 'Zanosibisi@22!',
         role: UserRole.PARTNER,
         tenantId: 'mno-global',
         tenantName: 'My Next Opportunity',
         status: 'active',
         lastLogin: 'Just now',
+        avatarInitials: 'LS'
+    },
+    {
+        id: 'u-client-liberty',
+        name: 'Liberty Placements',
+        email: 'placements@liberty.co.za',
+        password: 'recruit@13#',
+        role: UserRole.LIBERTY,
+        tenantId: 'cli-001',
+        tenantName: 'Liberty Group',
+        status: 'active',
+        lastLogin: '2 hours ago',
+        avatarInitials: 'LP'
+    },
+    {
+        id: 'u-recruiter-mno',
+        name: 'Luthando Sibisi (Recruiter)',
+        email: 'luthando@my-next-opportunity.careers',
+        password: 'Thando@22!',
+        role: UserRole.RECRUITER,
+        tenantId: 'mno-hub',
+        tenantName: 'MNO Hub',
+        status: 'active',
+        lastLogin: 'Yesterday',
         avatarInitials: 'LS'
     }
 ];

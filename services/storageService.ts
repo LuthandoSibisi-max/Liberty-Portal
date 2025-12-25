@@ -4,6 +4,7 @@ export const storageService = {
         try {
             const serializedData = JSON.stringify(data);
             localStorage.setItem(`mno_v2_${key}`, serializedData);
+            localStorage.setItem(`mno_v2_last_sync`, new Date().toISOString());
         } catch (error) {
             console.error(`Error saving ${key} to localStorage`, error);
         }
@@ -20,6 +21,10 @@ export const storageService = {
             console.error(`Error loading ${key} from localStorage`, error);
             return fallbackData;
         }
+    },
+
+    getLastSync: (): string => {
+        return localStorage.getItem('mno_v2_last_sync') || new Date().toISOString();
     },
 
     // Track AI usage for "Real-time Cost Analysis"

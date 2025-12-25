@@ -4,7 +4,7 @@ export enum AppView {
     DASHBOARD = 'dashboard',
     PIPELINE = 'pipeline',
     CANDIDATES_DATABASE = 'candidates_database',
-    TALENT_POOL = 'talent_pool', // New View
+    TALENT_POOL = 'talent_pool',
     REQUESTS = 'requests',
     REQUEST_DETAIL = 'request_detail',
     CALENDAR = 'calendar',
@@ -14,14 +14,13 @@ export enum AppView {
     ANALYTICS = 'analytics',
     AI_TOOLKIT = 'ai_toolkit',
     MEDIA_STUDIO = 'media_studio',
-    // Admin Specific Views
     ADMIN_SECURITY = 'admin_security',
     ADMIN_COSTS = 'admin_costs',
     ADMIN_USERS = 'admin_users',
     ADMIN_CLIENTS = 'admin_clients',
     ADMIN_ENGAGEMENT = 'admin_engagement',
     ADMIN_PERFORMANCE = 'admin_performance',
-    ADMIN_TOOLS = 'admin_tools' // New Advanced Tools
+    ADMIN_TOOLS = 'admin_tools'
 }
 
 export enum UserRole {
@@ -61,14 +60,14 @@ export interface GeneratedQuestion {
 
 export interface Candidate {
     id: number;
-    requestId?: number | string; // Linked Request
+    requestId?: number | string;
     name: string;
     role: string;
     email: string;
     phone: string;
     experience: string;
     re5: 'certified' | 'pending' | 'none';
-    isRE5Certified?: boolean; // New boolean field
+    isRE5Certified?: boolean;
     status: 'new' | 'screen' | 'shortlist' | 'interview' | 'offer' | 'hired' | 'rejected' | 'sourced';
     rating: number;
     matchScore: number;
@@ -78,25 +77,27 @@ export interface Candidate {
     notes?: Note[];
     priority?: 'high' | 'medium' | 'low';
     source?: string;
-    sourceId?: string; // ID of the partner who submitted (e.g., 'MNO')
+    sourceId?: string;
     skills?: string[];
-    // Extended Details for Screening
     currentCompany?: string;
     noticePeriod?: string;
     salaryExpectation?: string;
     cvText?: string;
-    aiAnalysis?: string; // Stores JSON string of analysis
-    submissionNotes?: string; // Notes from the partner
-    lastContacted?: string; // New field for tracking outreach date
-    daysInStage?: number; // For pipeline stagnation tracking
-    interviewGuide?: string; // JSON string of GeneratedQuestion[]
+    aiAnalysis?: string;
+    submissionNotes?: string;
+    lastContacted?: string;
+    daysInStage?: number;
+    interviewGuide?: string;
+    qualification?: string;
+    employmentStatus?: string;
+    sellingPoints?: string;
+    probeQuestions?: string;
 }
 
-// New Interface for Passive Talent (LinkedIn Followers)
 export interface TalentProfile {
     id: string;
     name: string;
-    headline: string; // "Senior FA at Momentum | Wealth Manager"
+    headline: string;
     currentCompany: string;
     location: string;
     linkedInUrl: string;
@@ -117,15 +118,15 @@ export interface Request {
     candidatesCount: number;
     postedDate: string;
     description?: string;
-    requirements?: string; // Specific field for generated requirements
+    requirements?: string;
     skills?: string[];
     salaryRange?: string;
     createdBy?: string;
-    assignedTo?: string; // e.g., 'MNO'
+    assignedTo?: string;
     partnerNotes?: string;
     targetHires?: number;
     re5Requirement?: 'required' | 'preferred' | 'not_required';
-    clientId?: string; // To link request to specific client
+    clientId?: string;
 }
 
 export interface RequestComment {
@@ -154,7 +155,7 @@ export interface Activity {
     description: string;
     time: string;
     user?: string;
-    clientId?: string; // For Admin filtering
+    clientId?: string;
 }
 
 export interface ChatMessage {
@@ -169,7 +170,7 @@ export interface ChatMessage {
 export interface CalendarEvent {
     id: number;
     title: string;
-    date: string; // YYYY-MM-DD
+    date: string;
     time: string;
     type: 'interview' | 'meeting' | 'deadline';
     candidateName?: string;
@@ -198,12 +199,11 @@ export interface Notification {
     time: string;
     read: boolean;
     type: 'info' | 'success' | 'warning' | 'error';
-    recipient: 'all' | 'liberty' | 'partner' | 'recruiter'; // Role-based targeting
+    recipient: 'all' | 'liberty' | 'partner' | 'recruiter';
 }
 
-// ADMIN SPECIFIC TYPES
 export interface ClientHealth {
-    score: number; // 0-100
+    score: number;
     sentiment: 'Positive' | 'Neutral' | 'Risk';
     lastActive: string;
     openRoles: number;
@@ -221,22 +221,10 @@ export interface Client {
     status: 'Active' | 'Onboarding' | 'Churned';
     accountManager: string;
     health: ClientHealth;
-    revenue: string; // Monthly Revenue
-    notes?: Note[]; // CRM notes for admin
+    revenue: string;
+    notes?: Note[];
 }
 
-export interface FeatureRequest {
-    id: string;
-    clientId: string;
-    clientName: string;
-    title: string;
-    description: string;
-    status: 'New' | 'In Review' | 'Planned' | 'In Progress' | 'Completed';
-    votes: number;
-    date: string;
-}
-
-// SECURITY & MONITORING TYPES
 export interface AuditLogEntry {
     id: string;
     timestamp: string;
@@ -248,20 +236,13 @@ export interface AuditLogEntry {
     details?: string;
 }
 
-export interface SecurityConfig {
-    require2FA: boolean;
-    passwordRotation: number; // days
-    ipWhitelistEnabled: boolean;
-    sessionTimeout: number; // minutes
-    ssoEnabled: boolean;
-}
-
 export interface UserAccount {
     id: string;
     name: string;
     email: string;
+    password?: string; // New field for login
     role: UserRole;
-    tenantId: string; // e.g., 'liberty-group' or 'mno-hub'
+    tenantId: string;
     tenantName: string; 
     status: 'active' | 'locked' | 'inactive';
     lastLogin: string;
@@ -270,9 +251,9 @@ export interface UserAccount {
 
 export interface SystemSettings {
     aiModels: {
-        veoEnabled: boolean; // Costly video generation
-        imagenEnabled: boolean; // Image generation
-        textModel: string; // 'gemini-2.5-flash' fixed for now
+        veoEnabled: boolean;
+        imagenEnabled: boolean;
+        textModel: string;
     };
     platform: {
         maintenanceMode: boolean;

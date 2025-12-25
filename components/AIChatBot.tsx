@@ -9,7 +9,7 @@ export const AIChatBot: React.FC = () => {
         {
             id: 'init',
             role: 'model',
-            text: 'Hi there! 👋 I\'m your Liberty Recruitment AI. I can analyze resumes, map locations, or deep-reason through complex queries. How can I assist?',
+            text: 'Hi there! 👋 I\'m your Recruitment AI Assistant. I can analyze resumes, map locations, or deep-reason through complex queries. How can I assist?',
             timestamp: new Date()
         }
     ]);
@@ -311,7 +311,7 @@ export const AIChatBot: React.FC = () => {
                     {messages.length < 3 && !isLoading && (
                         <div className="px-5 pb-2 bg-slate-50 dark:bg-slate-900/50">
                             <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2">
-                                {['Draft outreach email', 'Map nearby Liberty offices', 'Screen candidate with deep thinking'].map(s => (
+                                {['Draft outreach email', 'Map nearby offices', 'Screen candidate with deep thinking'].map(s => (
                                     <button 
                                         key={s} 
                                         onClick={() => handleSuggestion(s)}

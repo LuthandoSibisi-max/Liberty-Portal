@@ -57,7 +57,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ setView, requests = [], ca
                                 <span className="w-2 h-2 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.5)] animate-pulse"></span>
                                 Client Portal Active
                             </div>
-                            <h1 className="text-4xl font-serif font-bold mb-3 tracking-tight text-white">Welcome back, Liberty Group.</h1>
+                            <h1 className="text-4xl font-serif font-bold mb-3 tracking-tight text-white">Welcome back.</h1>
                             <p className="text-slate-400 text-lg font-light leading-relaxed max-w-xl">
                                 Your recruitment workspace is fresh and optimized. Start by creating a new search request or exploring the global talent pool.
                             </p>
@@ -97,11 +97,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ setView, requests = [], ca
                                 </p>
                                 <p className="text-sm text-slate-300 flex items-start gap-2">
                                     <i className="fas fa-check-circle text-green-500 mt-1 text-xs"></i>
-                                    <span><span className="font-bold text-white">{candidates.filter(c => c.status === 'new').length} new applicants</span> need screening for "Financial Advisor" roles.</span>
+                                    <span><span className="font-bold text-white">{candidates.filter(c => c.status === 'new').length} new applicants</span> need screening.</span>
                                 </p>
                                 <p className="text-sm text-slate-300 flex items-start gap-2">
                                     <i className="fas fa-chart-line text-blue-500 mt-1 text-xs"></i>
-                                    <span>Market Trend: Salary expectations for "Senior Developers" have risen 5% this week.</span>
+                                    <span>Market Trend: Salary expectations for specialized roles have risen 5% this week.</span>
                                 </p>
                             </div>
                         </div>
@@ -265,7 +265,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ setView, requests = [], ca
                             <div className="space-y-6">
                                 <div className="flex gap-4">
                                     <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center shrink-0 text-blue-400"><i className="fas fa-robot"></i></div>
-                                    <p className="text-xs text-slate-300 leading-relaxed">Use <strong>AI Scout</strong> inside any request to automatically find matches from the 26k talent database.</p>
+                                    <p className="text-xs text-slate-300 leading-relaxed">Use <strong>AI Scout</strong> inside any request to automatically find matches from the global talent database.</p>
                                 </div>
                                 <div className="flex gap-4">
                                     <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center shrink-0 text-purple-400"><i className="fas fa-video"></i></div>

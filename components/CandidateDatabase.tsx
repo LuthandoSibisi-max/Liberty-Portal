@@ -2,6 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { Candidate, Request } from '../types';
 import { CandidateDetailModal } from './CandidateDetailModal';
+import { AddCandidateModal } from './AddCandidateModal';
 import { geminiService } from '../services/geminiService';
 
 interface CandidateDatabaseProps {
@@ -50,7 +51,7 @@ const CandidateRow = React.memo(({ candidate, screeningId, onSelect, onScreen }:
             <td className="p-4">
                 <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide ${
                     candidate.status === 'shortlist' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' :
-                    candidate.status === 'interview' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' :
+                    candidate.status === 'interview' ? 'bg-purple-100 dark:bg-blue-900/30 text-purple-700 dark:text-purple-300' :
                     candidate.status === 'hired' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' :
                     'bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-400'
                 }`}>
@@ -114,6 +115,7 @@ export const CandidateDatabase: React.FC<CandidateDatabaseProps> = ({
     const [sourceFilter, setSourceFilter] = useState('all');
     const [selectedCandidateId, setSelectedCandidateId] = useState<number | null>(null);
     const [screeningId, setScreeningId] = useState<number | null>(null);
+    const [showAddModal, setShowAddModal] = useState(false);
     
     // Sort State
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({
@@ -225,17 +227,6 @@ export const CandidateDatabase: React.FC<CandidateDatabaseProps> = ({
         document.body.removeChild(link);
     };
 
-    const handleAdd = () => {
-        const name = prompt("Enter candidate name:");
-        if (!name) return;
-        const email = prompt("Enter email:", name.toLowerCase().replace(' ', '.') + "@example.com");
-        const role = prompt("Enter role applied for:", "General");
-        
-        if (onAddCandidate) {
-            onAddCandidate({ name, email: email || '', role: role || 'General' });
-        }
-    };
-
     return (
         <div className="p-6 h-full flex flex-col animate-fade-in-up">
             <div className="flex justify-between items-center mb-6">
@@ -247,7 +238,7 @@ export const CandidateDatabase: React.FC<CandidateDatabaseProps> = ({
                     <button onClick={handleExportCSV} className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-600 dark:text-slate-200 shadow-sm flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
                         <i className="fas fa-file-export"></i> Export CSV
                     </button>
-                    <button onClick={handleAdd} className="px-4 py-2 bg-liberty-blue text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-900/10 hover:bg-liberty-light transition-colors flex items-center gap-2">
+                    <button onClick={() => setShowAddModal(true)} className="px-4 py-2 bg-liberty-blue text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-900/10 hover:bg-liberty-light transition-colors flex items-center gap-2">
                         <i className="fas fa-user-plus"></i> Add Candidate
                     </button>
                 </div>
@@ -377,6 +368,14 @@ export const CandidateDatabase: React.FC<CandidateDatabaseProps> = ({
                     onClose={() => setSelectedCandidateId(null)} 
                     onAddNote={onAddNote}
                     onUpdateCandidate={onUpdateCandidate}
+                />
+            )}
+
+            {showAddModal && (
+                <AddCandidateModal 
+                    onClose={() => setShowAddModal(false)}
+                    onAdd={onAddCandidate!}
+                    requests={requests}
                 />
             )}
         </div>
