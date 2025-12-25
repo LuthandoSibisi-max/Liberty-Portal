@@ -20,7 +20,8 @@ export enum AppView {
     ADMIN_USERS = 'admin_users',
     ADMIN_CLIENTS = 'admin_clients',
     ADMIN_ENGAGEMENT = 'admin_engagement',
-    ADMIN_PERFORMANCE = 'admin_performance'
+    ADMIN_PERFORMANCE = 'admin_performance',
+    ADMIN_TOOLS = 'admin_tools' // New Advanced Tools
 }
 
 export enum UserRole {
@@ -31,7 +32,6 @@ export enum UserRole {
 
 export interface Review {
     id: string;
-// ... (rest of file remains unchanged, ensure other interfaces are preserved)
     reviewer: string;
     date: string;
     rating: number;
@@ -50,6 +50,13 @@ export interface Note {
     author: string;
     date: string;
     text: string;
+}
+
+export interface GeneratedQuestion {
+    question: string;
+    rationale: string;
+    difficulty: 'Easy' | 'Medium' | 'Hard';
+    category: 'Technical' | 'Behavioral' | 'Cultural';
 }
 
 export interface Candidate {
@@ -81,6 +88,8 @@ export interface Candidate {
     aiAnalysis?: string; // Stores JSON string of analysis
     submissionNotes?: string; // Notes from the partner
     lastContacted?: string; // New field for tracking outreach date
+    daysInStage?: number; // For pipeline stagnation tracking
+    interviewGuide?: string; // JSON string of GeneratedQuestion[]
 }
 
 // New Interface for Passive Talent (LinkedIn Followers)
@@ -245,4 +254,29 @@ export interface SecurityConfig {
     ipWhitelistEnabled: boolean;
     sessionTimeout: number; // minutes
     ssoEnabled: boolean;
+}
+
+export interface UserAccount {
+    id: string;
+    name: string;
+    email: string;
+    role: UserRole;
+    tenantId: string; // e.g., 'liberty-group' or 'mno-hub'
+    tenantName: string; 
+    status: 'active' | 'locked' | 'inactive';
+    lastLogin: string;
+    avatarInitials: string;
+}
+
+export interface SystemSettings {
+    aiModels: {
+        veoEnabled: boolean; // Costly video generation
+        imagenEnabled: boolean; // Image generation
+        textModel: string; // 'gemini-2.5-flash' fixed for now
+    };
+    platform: {
+        maintenanceMode: boolean;
+        publicRegistration: boolean;
+        debugLogging: boolean;
+    };
 }

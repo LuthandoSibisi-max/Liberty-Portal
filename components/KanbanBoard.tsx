@@ -67,9 +67,9 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ candidates, onStatusCh
 
             <div className="flex-1 flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
                 {stages.map(stage => (
-                    <div key={stage.id} className="flex-none w-72 flex flex-col h-full min-h-0">
+                    <div key={stage.id} className="flex-none w-80 flex flex-col h-full min-h-0">
                         {/* Column Header */}
-                        <div className={`p-3 bg-white dark:bg-slate-800 rounded-t-xl border-t-4 ${stage.color} shadow-sm mb-2 shrink-0 flex justify-between items-center`}>
+                        <div className={`p-4 bg-white dark:bg-slate-800 rounded-t-xl border-t-4 ${stage.color} shadow-sm mb-3 shrink-0 flex justify-between items-center`}>
                             <h3 className="font-bold text-slate-700 dark:text-slate-200 text-xs uppercase tracking-wide">{stage.label}</h3>
                             <span className="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full text-[10px] font-bold">
                                 {getCandidatesByStage(stage.id).length}
@@ -77,13 +77,12 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ candidates, onStatusCh
                         </div>
                         
                         {/* Droppable Area */}
-                        <div className="flex-1 bg-slate-100/50 dark:bg-slate-800/30 rounded-xl p-2 space-y-2 overflow-y-auto custom-scrollbar border border-slate-100 dark:border-slate-800/50">
+                        <div className="flex-1 bg-slate-50/50 dark:bg-slate-900/30 rounded-xl p-2 space-y-3 overflow-y-auto custom-scrollbar border border-slate-100 dark:border-slate-800/50">
                             {getCandidatesByStage(stage.id).map(candidate => (
                                 <CandidateCard 
                                     key={candidate.id} 
                                     candidate={candidate} 
                                     onClick={() => setSelectedCandidate(candidate)}
-                                    // Simulating Drag & Drop controls with simple move buttons for demo
                                     onMove={(direction) => {
                                         const currentIndex = stages.findIndex(s => s.id === stage.id);
                                         const nextStage = stages[currentIndex + direction];
@@ -92,8 +91,9 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ candidates, onStatusCh
                                 />
                             ))}
                             {getCandidatesByStage(stage.id).length === 0 && (
-                                <div className="h-24 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-lg flex items-center justify-center text-slate-400 dark:text-slate-600 text-xs font-medium italic">
-                                    Empty
+                                <div className="h-32 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl flex flex-col items-center justify-center text-slate-400 dark:text-slate-600">
+                                    <i className="fas fa-inbox text-xl mb-2 opacity-50"></i>
+                                    <span className="text-xs font-medium italic">No Candidates</span>
                                 </div>
                             )}
                         </div>
@@ -119,36 +119,51 @@ interface CandidateCardProps {
 }
 
 const CandidateCard: React.FC<CandidateCardProps> = ({ candidate, onClick, onMove }) => {
+    // Simulate days in stage (random for demo)
+    const daysInStage = candidate.daysInStage || Math.floor(Math.random() * 10);
+    const isStagnant = daysInStage > 5;
+
     return (
-        <div className="bg-white dark:bg-slate-800 p-3 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 hover:shadow-md transition-all duration-200 group relative hover:scale-[1.02]">
-            <div onClick={onClick} className="cursor-pointer">
-                <div className="flex items-center gap-2 mb-2">
-                    <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-[10px] font-bold text-slate-600 dark:text-slate-300 shrink-0">
-                        {candidate.avatarInitials}
-                    </div>
-                    <div className="min-w-0">
-                        <h4 className="font-bold text-slate-800 dark:text-slate-100 text-xs truncate">{candidate.name}</h4>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{candidate.role}</p>
-                    </div>
-                </div>
-                <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-1">
-                        <div className="w-12 h-1 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                             <div className="h-full bg-green-500" style={{width: `${candidate.matchScore}%`}}></div>
+        <div className={`bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border hover:shadow-md transition-all duration-200 group relative cursor-pointer ${isStagnant ? 'border-red-200 dark:border-red-900/30' : 'border-slate-200 dark:border-slate-700'}`}>
+            <div onClick={onClick}>
+                <div className="flex justify-between items-start mb-3">
+                    <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300 shrink-0 border border-slate-200 dark:border-slate-600">
+                            {candidate.avatarInitials}
                         </div>
-                        <span className="text-[9px] font-bold text-slate-400">{candidate.matchScore}%</span>
+                        <div className="min-w-0">
+                            <h4 className="font-bold text-slate-800 dark:text-slate-100 text-sm truncate">{candidate.name}</h4>
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-[120px]">{candidate.role}</p>
+                        </div>
                     </div>
-                    {candidate.priority === 'high' && <i className="fas fa-fire text-red-500 text-[10px]"></i>}
+                    {candidate.priority === 'high' && (
+                        <div className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.5)]"></div>
+                    )}
+                </div>
+                
+                <div className="flex justify-between items-center pt-3 border-t border-slate-100 dark:border-slate-700">
+                    <div className="flex items-center gap-2">
+                        <div className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${candidate.matchScore >= 80 ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}>
+                            {candidate.matchScore}% Match
+                        </div>
+                        {isStagnant && (
+                            <div className="text-[10px] font-bold text-red-500 flex items-center gap-1">
+                                <i className="fas fa-clock"></i> {daysInStage}d
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
             
-            {/* Quick Move Controls (Simulating DnD) */}
-            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                 <button onClick={(e) => { e.stopPropagation(); onMove(-1); }} className="w-5 h-5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 rounded text-[10px] text-slate-500 flex items-center justify-center" title="Move Back">
-                    <i className="fas fa-chevron-left"></i>
-                 </button>
-                 <button onClick={(e) => { e.stopPropagation(); onMove(1); }} className="w-5 h-5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 rounded text-[10px] text-slate-500 flex items-center justify-center" title="Move Forward">
+            {/* Quick Move Controls */}
+            <div className="absolute top-1/2 -translate-y-1/2 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                 <button onClick={(e) => { e.stopPropagation(); onMove(1); }} className="w-6 h-6 bg-slate-100 dark:bg-slate-700 hover:bg-blue-500 hover:text-white rounded-full text-[10px] text-slate-500 shadow-sm flex items-center justify-center transition-colors">
                     <i className="fas fa-chevron-right"></i>
+                 </button>
+            </div>
+             <div className="absolute top-1/2 -translate-y-1/2 left-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                 <button onClick={(e) => { e.stopPropagation(); onMove(-1); }} className="w-6 h-6 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-full text-[10px] text-slate-500 shadow-sm flex items-center justify-center transition-colors">
+                    <i className="fas fa-chevron-left"></i>
                  </button>
             </div>
         </div>

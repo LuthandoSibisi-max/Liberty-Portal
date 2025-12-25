@@ -3,7 +3,7 @@ export const storageService = {
     save: (key: string, data: any) => {
         try {
             const serializedData = JSON.stringify(data);
-            localStorage.setItem(`mno_${key}`, serializedData);
+            localStorage.setItem(`mno_v2_${key}`, serializedData);
         } catch (error) {
             console.error(`Error saving ${key} to localStorage`, error);
         }
@@ -11,7 +11,7 @@ export const storageService = {
 
     load: (key: string, fallbackData: any) => {
         try {
-            const serializedData = localStorage.getItem(`mno_${key}`);
+            const serializedData = localStorage.getItem(`mno_v2_${key}`);
             if (serializedData === null) {
                 return fallbackData;
             }
@@ -22,11 +22,17 @@ export const storageService = {
         }
     },
 
+    // Track AI usage for "Real-time Cost Analysis"
+    trackUsage: (model: 'flash' | 'pro' | 'veo') => {
+        const usage = storageService.load('ai_usage', { flash: 0, pro: 0, veo: 0 });
+        usage[model] += 1;
+        storageService.save('ai_usage', usage);
+    },
+
     clearAll: () => {
         try {
-            // Clear only keys starting with mno_
             Object.keys(localStorage).forEach(key => {
-                if (key.startsWith('mno_')) {
+                if (key.startsWith('mno_v2_')) {
                     localStorage.removeItem(key);
                 }
             });

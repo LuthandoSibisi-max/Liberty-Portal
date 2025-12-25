@@ -2,6 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Request, UserRole, Candidate, Submission, RequestComment } from '../types';
 import { geminiService } from '../services/geminiService';
+import { SubmitCandidateModal } from './SubmitCandidateModal';
 
 interface RequestDetailProps {
     requestId: number | string;
@@ -72,15 +73,10 @@ export const RequestDetail: React.FC<RequestDetailProps> = ({
     const [commentInput, setCommentInput] = useState('');
     const [isManageMenuOpen, setIsManageMenuOpen] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
-    const [activeTab, setActiveTab] = useState<'candidates' | 'market'>('candidates');
+    const [activeTab, setActiveTab] = useState<'overview' | 'candidates' | 'market'>('overview');
 
     const [marketAnalysis, setMarketAnalysis] = useState<{text: string, sources?: any[]} | null>(null);
     const [isAnalyzingMarket, setIsAnalyzingMarket] = useState(false);
-
-    const [formData, setFormData] = useState({
-        name: '', email: '', phone: '', currentRole: '', currentCompany: '',
-        experience: '', noticePeriod: '30 Days', salary: '', skills: '', cvText: '', isRE5Certified: false
-    });
 
     const chatContainerRef = useRef<HTMLDivElement>(null);
 
@@ -196,17 +192,82 @@ export const RequestDetail: React.FC<RequestDetailProps> = ({
                 <div className="lg:col-span-2 space-y-6">
                     <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 overflow-hidden flex flex-col h-full min-h-[500px]">
                         <div className="flex border-b border-slate-100 dark:border-slate-700">
-                            <button onClick={() => setActiveTab('candidates')} className={`px-6 py-4 text-sm font-bold border-b-2 ${activeTab === 'candidates' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'}`}>
+                            <button onClick={() => setActiveTab('overview')} className={`px-6 py-4 text-sm font-bold border-b-2 transition-colors ${activeTab === 'overview' ? 'border-liberty-blue text-liberty-blue dark:text-blue-400' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+                                Overview
+                            </button>
+                            <button onClick={() => setActiveTab('candidates')} className={`px-6 py-4 text-sm font-bold border-b-2 transition-colors ${activeTab === 'candidates' ? 'border-liberty-blue text-liberty-blue dark:text-blue-400' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
                                 Candidates ({relatedCandidates.length})
                             </button>
-                            <button onClick={() => setActiveTab('market')} className={`px-6 py-4 text-sm font-bold border-b-2 ${activeTab === 'market' ? 'border-purple-600 text-purple-600' : 'border-transparent text-slate-500'}`}>
+                            <button onClick={() => setActiveTab('market')} className={`px-6 py-4 text-sm font-bold border-b-2 transition-colors ${activeTab === 'market' ? 'border-purple-600 text-purple-600 dark:text-purple-400' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
                                 Market Intelligence
                             </button>
                         </div>
 
-                        <div className="flex-1 p-4">
-                            {activeTab === 'candidates' ? (
-                                <div className="divide-y divide-slate-50">
+                        <div className="flex-1 p-0">
+                            {activeTab === 'overview' && (
+                                <div className="p-6 space-y-6 animate-fade-in">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="md:col-span-2 space-y-2">
+                                            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                                <i className="fas fa-bullseye text-blue-500"></i> Fulfillment Scope
+                                            </h3>
+                                            <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-700">
+                                                <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap font-medium">
+                                                    {request.description || "No description provided."}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="md:col-span-2 space-y-2">
+                                            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                                <i className="fas fa-list-check text-purple-500"></i> Key Requirements
+                                            </h3>
+                                            <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-700">
+                                                {request.requirements ? (
+                                                    <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
+                                                        {request.requirements}
+                                                    </p>
+                                                ) : (
+                                                    <p className="text-sm text-slate-400 italic">No specific requirements listed.</p>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                                <i className="fas fa-tags text-indigo-500"></i> Dimension Markers
+                                            </h3>
+                                            <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 flex flex-wrap gap-2">
+                                                {request.skills && request.skills.length > 0 ? (
+                                                    request.skills.map((skill, i) => (
+                                                        <span key={i} className="px-3 py-1 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-200 shadow-sm">
+                                                            {skill}
+                                                        </span>
+                                                    ))
+                                                ) : (
+                                                    <span className="text-xs text-slate-400 italic">No skills tagged.</span>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {request.partnerNotes && (
+                                            <div className="space-y-2">
+                                                <h3 className="text-xs font-black text-amber-600 dark:text-amber-500 uppercase tracking-widest flex items-center gap-2">
+                                                    <i className="fas fa-file-signature"></i> Notes for MNO
+                                                </h3>
+                                                <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-2xl border border-amber-100 dark:border-amber-800/50">
+                                                    <p className="text-sm text-amber-900 dark:text-amber-100 leading-relaxed whitespace-pre-wrap">
+                                                        "{request.partnerNotes}"
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {activeTab === 'candidates' && (
+                                <div className="divide-y divide-slate-50 dark:divide-slate-700">
                                     {relatedCandidates.map(c => <CandidateListItem key={c.id} cand={c} onDiscuss={(n) => setCommentInput(`@${n} `)} />)}
                                     {relatedCandidates.length === 0 && (
                                         <div className="py-20 text-center text-slate-400">
@@ -215,18 +276,47 @@ export const RequestDetail: React.FC<RequestDetailProps> = ({
                                         </div>
                                     )}
                                 </div>
-                            ) : (
-                                <div className="p-4">
+                            )}
+
+                            {activeTab === 'market' && (
+                                <div className="p-6">
                                     {!marketAnalysis && !isAnalyzingMarket ? (
-                                        <div className="text-center py-20">
-                                            <button onClick={handleMarketAnalysis} className="px-6 py-3 bg-purple-100 text-purple-700 rounded-2xl font-bold hover:bg-purple-200 transition-all">
-                                                Generate Live Market Report
+                                        <div className="text-center py-20 flex flex-col items-center">
+                                            <div className="w-16 h-16 bg-purple-50 dark:bg-purple-900/20 rounded-full flex items-center justify-center mb-4">
+                                                <i className="fas fa-chart-line text-2xl text-purple-500"></i>
+                                            </div>
+                                            <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-2">Market Intelligence</h3>
+                                            <p className="text-slate-500 text-sm max-w-xs mb-6">Generate a live report on salary bands, competitor activity, and talent availability for {request.location}.</p>
+                                            <button onClick={handleMarketAnalysis} className="px-6 py-3 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700 transition-all shadow-lg shadow-purple-900/20">
+                                                Generate Live Report
                                             </button>
                                         </div>
                                     ) : isAnalyzingMarket ? (
-                                        <div className="py-20 text-center"><i className="fas fa-circle-notch fa-spin text-3xl text-purple-500"></i></div>
+                                        <div className="py-32 text-center">
+                                            <div className="w-12 h-12 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin mx-auto mb-4"></div>
+                                            <p className="text-slate-500 font-medium">Analyzing market data...</p>
+                                        </div>
                                     ) : (
-                                        <div className="whitespace-pre-wrap text-sm text-slate-600 leading-relaxed">{marketAnalysis?.text}</div>
+                                        <div className="prose prose-sm dark:prose-invert max-w-none">
+                                            <div className="whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-300 leading-relaxed p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700">
+                                                {marketAnalysis?.text}
+                                            </div>
+                                            {marketAnalysis?.sources && marketAnalysis.sources.length > 0 && (
+                                                <div className="mt-6">
+                                                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Sources</h4>
+                                                    <ul className="space-y-2">
+                                                        {marketAnalysis.sources.map((source: any, i: number) => (
+                                                            <li key={i} className="flex items-center gap-2 text-xs">
+                                                                <i className="fas fa-external-link-alt text-slate-400"></i>
+                                                                <a href={source.uri} target="_blank" rel="noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline truncate max-w-md">
+                                                                    {source.title || source.uri}
+                                                                </a>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
                             )}
@@ -235,37 +325,61 @@ export const RequestDetail: React.FC<RequestDetailProps> = ({
                 </div>
 
                 {/* Sidebar - Collaboration Hub */}
-                <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 flex flex-col h-[600px]">
-                    <div className="p-4 border-b border-slate-100 flex justify-between items-center">
-                        <h3 className="font-bold text-sm">Collaboration Hub</h3>
-                        <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 flex flex-col h-[600px] shadow-sm">
+                    <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-800/80">
+                        <h3 className="font-bold text-sm text-slate-800 dark:text-white">Collaboration Hub</h3>
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase">Live</span>
+                            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                        </div>
                     </div>
-                    <div className="flex-1 overflow-y-auto p-4 space-y-4" ref={chatContainerRef}>
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-slate-50/50 dark:bg-slate-900/50" ref={chatContainerRef}>
                         {comments.map(c => (
                             <div key={c.id} className={`flex flex-col ${c.role === userRole ? 'items-end' : 'items-start'}`}>
-                                <div className={`max-w-[85%] px-4 py-2 rounded-2xl text-xs ${c.role === userRole ? 'bg-blue-600 text-white rounded-br-none' : 'bg-slate-100 dark:bg-slate-700 rounded-bl-none'}`}>
-                                    <p className="font-bold opacity-70 text-[9px] uppercase mb-1">{c.author}</p>
-                                    <p>{c.text}</p>
+                                <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-xs shadow-sm ${
+                                    c.role === userRole 
+                                        ? 'bg-liberty-blue text-white rounded-br-none' 
+                                        : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-bl-none border border-slate-100 dark:border-slate-600'
+                                }`}>
+                                    <div className="flex justify-between items-center gap-4 mb-1 border-b border-white/10 pb-1">
+                                        <p className="font-bold uppercase opacity-90">{c.author}</p>
+                                        <p className="opacity-60 text-[9px]">{c.timestamp}</p>
+                                    </div>
+                                    <p className="leading-relaxed">{c.text}</p>
                                 </div>
                             </div>
                         ))}
+                        {comments.length === 0 && (
+                            <div className="text-center py-10 text-slate-400 text-xs">
+                                <p>No comments yet.</p>
+                                <p>Start a discussion about this request.</p>
+                            </div>
+                        )}
                     </div>
-                    <div className="p-4 border-t border-slate-100">
+                    <div className="p-4 border-t border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800">
                         <form onSubmit={handlePostComment} className="flex gap-2">
                             <input 
                                 type="text" 
                                 value={commentInput}
                                 onChange={(e) => setCommentInput(e.target.value)}
                                 placeholder="Type message..." 
-                                className="flex-1 bg-slate-50 dark:bg-slate-700 border-none rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500/20"
+                                className="flex-1 bg-slate-100 dark:bg-slate-700 border-none rounded-xl px-4 py-3 text-xs focus:ring-2 focus:ring-liberty-blue/50 text-slate-800 dark:text-white placeholder:text-slate-400 transition-all"
                             />
-                            <button type="submit" className="w-10 h-10 bg-blue-600 text-white rounded-xl flex items-center justify-center">
+                            <button type="submit" className="w-10 h-10 bg-liberty-blue text-white rounded-xl flex items-center justify-center hover:bg-liberty-light transition-colors shadow-lg active:scale-95">
                                 <i className="fas fa-paper-plane text-xs"></i>
                             </button>
                         </form>
                     </div>
                 </div>
             </div>
+
+            {isSubmitModalOpen && (
+                <SubmitCandidateModal 
+                    request={request} 
+                    onClose={() => setIsSubmitModalOpen(false)} 
+                    onSubmit={onCandidateSubmit}
+                />
+            )}
         </div>
     );
 };

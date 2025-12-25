@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Candidate, HistoryEvent, Review, Note } from '../types';
+import { Candidate, HistoryEvent, Review, Note, GeneratedQuestion } from '../types';
 import { geminiService } from '../services/geminiService';
 
 interface CandidateDetailModalProps {
@@ -18,17 +18,19 @@ interface AIAnalysisResult {
 }
 
 export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({ candidate, onClose, onAddNote, onUpdateCandidate }) => {
-    const [activeTab, setActiveTab] = useState<'history' | 'reviews' | 'notes' | 'ai_analysis'>('history');
+    const [activeTab, setActiveTab] = useState<'history' | 'reviews' | 'notes' | 'ai_analysis' | 'interview_prep'>('history');
     const [newNote, setNewNote] = useState('');
     const [aiAnalysis, setAiAnalysis] = useState<AIAnalysisResult | null>(null);
+    const [interviewQuestions, setInterviewQuestions] = useState<GeneratedQuestion[]>([]);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false);
+    const [analysisMode, setAnalysisMode] = useState<'fast' | 'deep'>('fast');
     const [showResume, setShowResume] = useState(false);
     
-    // Local state for immediate UI feedback (simulating real-time updates)
+    // Local state for immediate UI feedback
     const [currentStatus, setCurrentStatus] = useState(candidate.status);
     const [currentRating, setCurrentRating] = useState(candidate.rating);
 
-    // Live Tracking Config
     const PIPELINE_STEPS = [
         { id: 'new', label: 'New' },
         { id: 'screen', label: 'Screening' },
@@ -39,11 +41,10 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({ cand
     ];
 
     const currentStepIndex = PIPELINE_STEPS.findIndex(s => s.id === currentStatus) === -1 
-        ? (currentStatus === 'rejected' ? -1 : 0) // Default to 0 if unknown, -1 if rejected
+        ? (currentStatus === 'rejected' ? -1 : 0) 
         : PIPELINE_STEPS.findIndex(s => s.id === currentStatus);
 
     useEffect(() => {
-        // Parse existing AI analysis if available
         if (candidate.aiAnalysis) {
             try {
                 const parsed = JSON.parse(candidate.aiAnalysis);
@@ -51,20 +52,25 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({ cand
                     setAiAnalysis(parsed);
                 }
             } catch (e) {
-                // Fallback if legacy text
                 console.warn("Could not parse existing AI analysis as JSON");
+            }
+        }
+        if (candidate.interviewGuide) {
+            try {
+                setInterviewQuestions(JSON.parse(candidate.interviewGuide));
+            } catch(e) {
+                console.warn("Could not parse interview guide");
             }
         }
     }, [candidate]);
 
     const handleAddNote = () => {
         if (!newNote.trim()) return;
-        
         if (onAddNote) {
             onAddNote(candidate.id, newNote);
         }
         setNewNote('');
-        setActiveTab('notes'); // Ensure we stay on notes tab
+        setActiveTab('notes'); 
     };
 
     const handleStepClick = (stepId: string) => {
@@ -90,17 +96,25 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({ cand
     const runAIAnalysis = async () => {
         setIsAnalyzing(true);
         try {
-            // Re-construct minimal context for on-the-fly analysis if missing
-            const context = `Role: ${candidate.role}. Experience: ${candidate.experience}. Skills: ${candidate.skills?.join(', ')}`;
+            const context = `Role: ${candidate.role}. Experience: ${candidate.experience}. Skills: ${candidate.skills?.join(', ')}. Target Company: Liberty Group.`;
             
-            const result = await geminiService.screenCandidate({
+            const candidateData = {
                 candidateName: candidate.name,
                 experience: candidate.experience,
                 currentRole: candidate.role,
                 currentCompany: candidate.currentCompany || 'Unknown',
                 skills: candidate.skills?.join(', ') || '',
                 cvText: candidate.cvText || "N/A"
-            }, context);
+            };
+
+            let result;
+            if (analysisMode === 'deep') {
+                // Uses Gemini 3 Pro with Thinking Config
+                result = await geminiService.deepScreenCandidate(candidateData, context);
+            } else {
+                // Uses Gemini 3 Flash
+                result = await geminiService.screenCandidate(candidateData, context);
+            }
             
             setAiAnalysis(result);
             if (onUpdateCandidate) {
@@ -113,35 +127,57 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({ cand
         }
     };
 
+    const generateInterviewGuide = async () => {
+        setIsGeneratingQuestions(true);
+        try {
+            const candidateData = {
+                candidateName: candidate.name,
+                experience: candidate.experience,
+                skills: candidate.skills?.join(', ') || '',
+                weaknesses: aiAnalysis?.weaknesses || []
+            };
+            const result = await geminiService.generateInterviewQuestions(candidateData, candidate.role);
+            setInterviewQuestions(result);
+            if (onUpdateCandidate) {
+                onUpdateCandidate(candidate.id, { interviewGuide: JSON.stringify(result) });
+            }
+        } catch(e) {
+            console.error(e);
+        } finally {
+            setIsGeneratingQuestions(false);
+        }
+    };
+
     return (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-md animate-fade-in">
             {/* Resume Viewer Modal */}
             {showResume && (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-                    <div className="bg-white dark:bg-slate-900 w-full max-w-3xl h-[85vh] rounded-2xl flex flex-col shadow-2xl border border-slate-200 dark:border-slate-700 animate-fade-in-up">
-                        <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-800 rounded-t-2xl">
+                    <div className="bg-white dark:bg-slate-900 w-full max-w-3xl h-[85vh] rounded-3xl flex flex-col shadow-2xl border border-slate-200 dark:border-slate-800 animate-fade-in-up overflow-hidden">
+                        <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
                             <div>
-                                <h3 className="font-bold text-lg text-slate-800 dark:text-white">Resume Viewer</h3>
+                                <h3 className="font-bold text-lg text-slate-800 dark:text-white">Resume Artifact</h3>
                                 <p className="text-xs text-slate-500">{candidate.name}</p>
                             </div>
                             <div className="flex gap-2">
-                                <button className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors text-slate-500">
+                                <button className="w-10 h-10 flex items-center justify-center hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-colors text-slate-500">
                                     <i className="fas fa-download"></i>
                                 </button>
-                                <button onClick={() => setShowResume(false)} className="p-2 hover:bg-red-100 hover:text-red-500 rounded-lg transition-colors text-slate-500">
+                                <button onClick={() => setShowResume(false)} className="w-10 h-10 flex items-center justify-center hover:bg-red-50 hover:text-red-500 rounded-xl transition-colors text-slate-500">
                                     <i className="fas fa-times"></i>
                                 </button>
                             </div>
                         </div>
                         <div className="flex-1 overflow-y-auto p-8 bg-slate-100 dark:bg-slate-950 font-mono text-sm leading-relaxed text-slate-700 dark:text-slate-300">
                             {candidate.cvText ? (
-                                <div className="bg-white dark:bg-slate-900 p-8 shadow-sm min-h-full whitespace-pre-wrap">
+                                <div className="bg-white dark:bg-slate-900 p-10 shadow-sm min-h-full whitespace-pre-wrap rounded-xl border border-slate-200 dark:border-slate-800">
                                     {candidate.cvText}
                                 </div>
                             ) : (
                                 <div className="flex flex-col items-center justify-center h-full text-slate-400">
-                                    <i className="fas fa-file-excel text-4xl mb-4"></i>
-                                    <p>No resume text available for this candidate.</p>
+                                    <i className="fas fa-file-excel text-5xl mb-4 opacity-20"></i>
+                                    <p className="font-bold">No binary resume data found.</p>
+                                    <p className="text-xs mt-1">Artifact was sourced via text-only ingestion.</p>
                                 </div>
                             )}
                         </div>
@@ -149,406 +185,448 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({ cand
                 </div>
             )}
 
-            <div className="bg-white dark:bg-slate-800 rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
-                {/* Header */}
-                <div className="p-6 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/30">
-                    <div className="flex justify-between items-start mb-6">
-                        <div className="flex gap-4 w-full">
-                            <div className="h-16 w-16 rounded-full bg-liberty-blue text-white text-xl font-bold flex items-center justify-center border-4 border-white dark:border-slate-600 shadow-md relative">
+            <div className="bg-white dark:bg-[#0B1120] rounded-[2.5rem] w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col shadow-[0_0_50px_rgba(0,0,0,0.3)] border border-slate-200 dark:border-slate-800">
+                {/* Header Section */}
+                <div className="p-8 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20">
+                    <div className="flex justify-between items-start mb-8">
+                        <div className="flex gap-6 w-full">
+                            <div className="h-20 w-20 rounded-2xl bg-gradient-to-br from-liberty-blue to-liberty-light text-white text-2xl font-bold flex items-center justify-center shadow-lg relative shrink-0">
                                 {candidate.avatarInitials}
-                                {candidate.source === 'Internal DB (AI)' && (
-                                    <div className="absolute -bottom-1 -right-1 bg-purple-500 text-white text-[8px] px-1.5 py-0.5 rounded-full border border-white">AI</div>
+                                {candidate.source?.includes('AI') && (
+                                    <div className="absolute -bottom-2 -right-2 bg-purple-600 text-white text-[9px] px-2 py-0.5 rounded-full border-2 border-white dark:border-[#0B1120] font-black uppercase tracking-tighter">AI Scout</div>
                                 )}
                             </div>
-                            <div className="flex-1">
-                                <div className="flex justify-between">
+                            <div className="flex-1 min-w-0">
+                                <div className="flex justify-between items-start">
                                     <div>
-                                        <h2 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                        <h2 className="text-3xl font-serif font-bold text-slate-900 dark:text-white flex items-center gap-3">
                                             {candidate.name}
-                                            {candidate.source === 'Internal DB (AI)' && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-lg border border-purple-200">AI Scout Match</span>}
+                                            <span className="text-xs bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-3 py-1 rounded-full border border-blue-100 dark:border-blue-800 font-bold uppercase tracking-widest">{candidate.source}</span>
                                         </h2>
-                                        <p className="text-slate-500 dark:text-slate-400">{candidate.role}</p>
+                                        <p className="text-slate-500 dark:text-slate-400 text-lg mt-1">{candidate.role}</p>
                                     </div>
-                                    <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
+                                    <button onClick={onClose} className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-all">
                                         <i className="fas fa-times text-xl"></i>
                                     </button>
                                 </div>
-                                <div className="flex items-center gap-4 mt-2">
-                                    <div className="flex items-center gap-1">
+                                <div className="flex items-center gap-6 mt-4">
+                                    <div className="flex items-center gap-1.5">
                                         {[1, 2, 3, 4, 5].map((star) => (
                                             <button 
                                                 key={star}
                                                 onClick={() => handleRatingUpdate(star)}
-                                                className={`text-sm focus:outline-none transition-transform hover:scale-110 ${star <= currentRating ? 'text-yellow-400' : 'text-slate-300 dark:text-slate-600'}`}
+                                                className={`text-base focus:outline-none transition-all hover:scale-125 ${star <= currentRating ? 'text-amber-400' : 'text-slate-200 dark:text-slate-700'}`}
                                             >
                                                 <i className="fas fa-star"></i>
                                             </button>
                                         ))}
                                     </div>
+                                    <div className="h-4 w-px bg-slate-200 dark:bg-slate-700"></div>
                                     {(candidate.re5 === 'certified' || candidate.isRE5Certified) && (
-                                        <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
-                                            RE5 Certified
-                                        </span>
+                                        <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800 text-xs font-black uppercase tracking-widest">
+                                            <i className="fas fa-certificate"></i> RE5 Certified
+                                        </div>
                                     )}
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* LIVE TRACKER STEPPER */}
-                    <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700 shadow-sm">
-                        <div className="flex justify-between items-center mb-3">
-                            <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                                <i className="fas fa-route text-liberty-blue dark:text-blue-400"></i> Application Journey
-                            </h4>
-                            <div className="flex items-center gap-2">
-                                <span className="text-[10px] font-medium text-slate-400">Time in Stage:</span>
-                                <span className="text-xs font-bold text-slate-800 dark:text-white bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded flex items-center gap-1">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
-                                    2 Days
-                                </span>
-                            </div>
-                        </div>
-                        {currentStatus === 'rejected' ? (
-                            <div className="w-full bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900 rounded-lg p-3 flex items-center justify-center gap-3">
-                                <i className="fas fa-ban text-red-500 text-lg"></i>
-                                <span className="font-bold text-red-700 dark:text-red-300">Application Rejected</span>
-                                <button 
-                                    onClick={() => { setCurrentStatus('new'); if (onUpdateCandidate) onUpdateCandidate(candidate.id, {status: 'new'}); }}
-                                    className="text-xs underline text-red-600 hover:text-red-800 ml-4"
-                                >
-                                    Reactivate
-                                </button>
-                            </div>
-                        ) : (
-                            <div className="relative flex justify-between items-center px-2">
-                                {/* Connecting Line */}
-                                <div className="absolute top-1/2 left-0 w-full h-0.5 bg-slate-200 dark:bg-slate-700 -z-0"></div>
-                                <div 
-                                    className="absolute top-1/2 left-0 h-0.5 bg-green-500 transition-all duration-500 -z-0" 
-                                    style={{ width: `${(currentStepIndex / (PIPELINE_STEPS.length - 1)) * 100}%` }}
-                                ></div>
+                    {/* Progress Journey */}
+                    <div className="relative flex justify-between items-center px-4 py-2">
+                        <div className="absolute top-1/2 left-0 w-full h-1 bg-slate-100 dark:bg-slate-800 -translate-y-1/2 rounded-full"></div>
+                        <div 
+                            className="absolute top-1/2 left-0 h-1 bg-liberty-blue dark:bg-blue-500 transition-all duration-700 -translate-y-1/2 rounded-full shadow-[0_0_10px_rgba(59,130,246,0.3)]" 
+                            style={{ width: `${currentStatus === 'rejected' ? 0 : (currentStepIndex / (PIPELINE_STEPS.length - 1)) * 100}%` }}
+                        ></div>
 
-                                {PIPELINE_STEPS.map((step, index) => {
-                                    const isCompleted = index <= currentStepIndex;
-                                    const isCurrent = index === currentStepIndex;
-                                    
-                                    return (
-                                        <div key={step.id} className="relative z-10 flex flex-col items-center group cursor-pointer" onClick={() => handleStepClick(step.id)}>
-                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all duration-300 ${
-                                                isCurrent 
-                                                    ? 'bg-liberty-blue border-liberty-blue text-white scale-110 shadow-md ring-2 ring-blue-200 dark:ring-blue-900' 
-                                                    : isCompleted 
-                                                        ? 'bg-green-50 border-green-50 text-white' 
-                                                        : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-400'
-                                            }`}>
-                                                {isCompleted && !isCurrent ? <i className="fas fa-check"></i> : index + 1}
-                                            </div>
-                                            <span className={`absolute top-full mt-2 text-[10px] font-bold uppercase tracking-wide whitespace-nowrap transition-colors ${
-                                                isCurrent ? 'text-liberty-blue dark:text-blue-400' : isCompleted ? 'text-green-600 dark:text-green-400' : 'text-slate-400'
-                                            }`}>
-                                                {step.label}
-                                            </span>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
+                        {PIPELINE_STEPS.map((step, index) => {
+                            const isCompleted = index <= currentStepIndex && currentStatus !== 'rejected';
+                            const isCurrent = index === currentStepIndex && currentStatus !== 'rejected';
+                            
+                            return (
+                                <div key={step.id} className="relative z-10 flex flex-col items-center group cursor-pointer" onClick={() => handleStepClick(step.id)}>
+                                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center text-xs font-black transition-all duration-300 border-2 ${
+                                        isCurrent 
+                                            ? 'bg-liberty-blue border-liberty-blue text-white scale-125 shadow-xl rotate-3' 
+                                            : isCompleted 
+                                                ? 'bg-white dark:bg-[#0B1120] border-liberty-blue text-liberty-blue' 
+                                                : 'bg-white dark:bg-[#0B1120] border-slate-200 dark:border-slate-800 text-slate-300'
+                                    }`}>
+                                        {isCompleted && !isCurrent ? <i className="fas fa-check"></i> : index + 1}
+                                    </div>
+                                    <span className={`absolute top-full mt-4 text-[10px] font-black uppercase tracking-widest transition-colors ${
+                                        isCurrent ? 'text-liberty-blue dark:text-blue-400' : isCompleted ? 'text-slate-600 dark:text-slate-300' : 'text-slate-300'
+                                    }`}>
+                                        {step.label}
+                                    </span>
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
 
-                <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
-                    {/* Sidebar Info */}
-                    <div className="w-full md:w-1/3 bg-slate-50 dark:bg-slate-800/50 p-6 border-r border-slate-100 dark:border-slate-700 overflow-y-auto">
-                        
-                        {/* Recruiter Notes Section (if available) */}
-                        {candidate.submissionNotes && (
-                            <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800 rounded-xl">
-                                <h3 className="font-bold text-amber-800 dark:text-amber-200 mb-2 text-xs uppercase tracking-wider flex items-center gap-2">
-                                    <i className="fas fa-comment-alt"></i> Recruiter Notes
-                                </h3>
-                                <p className="text-sm text-amber-900 dark:text-amber-100 italic leading-relaxed">
-                                    "{candidate.submissionNotes}"
-                                </p>
-                            </div>
-                        )}
-
-                        <h3 className="font-bold text-slate-800 dark:text-white mb-4 text-sm uppercase tracking-wider">Contact & Info</h3>
-                        <div className="space-y-4 text-sm">
+                <div className="flex-1 flex flex-col md:flex-row overflow-hidden bg-white dark:bg-[#0B1120]">
+                    {/* Sidebar: Details */}
+                    <div className="w-full md:w-80 bg-slate-50/30 dark:bg-slate-900/10 p-8 border-r border-slate-100 dark:border-slate-800 overflow-y-auto">
+                        <div className="space-y-8">
                             <div>
-                                <label className="text-xs text-slate-500 dark:text-slate-400 font-semibold block mb-1">Email</label>
-                                <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
-                                    <i className="fas fa-envelope text-slate-400 w-4"></i>
-                                    <a href={`mailto:${candidate.email}`} className="hover:text-liberty-blue dark:hover:text-blue-400 hover:underline truncate">{candidate.email}</a>
-                                </div>
-                            </div>
-                            <div>
-                                <label className="text-xs text-slate-500 dark:text-slate-400 font-semibold block mb-1">Phone</label>
-                                <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
-                                    <i className="fas fa-phone text-slate-400 w-4"></i>
-                                    <span>{candidate.phone}</span>
-                                </div>
-                            </div>
-                            <div>
-                                <label className="text-xs text-slate-500 dark:text-slate-400 font-semibold block mb-1">Experience</label>
-                                <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
-                                    <i className="fas fa-briefcase text-slate-400 w-4"></i>
-                                    <span>{candidate.experience}</span>
-                                </div>
-                            </div>
-                            <div>
-                                <label className="text-xs text-slate-500 dark:text-slate-400 font-semibold block mb-1">AI Match Score</label>
-                                <div className="flex items-center gap-2">
-                                    <div className="flex-1 bg-slate-200 dark:bg-slate-700 rounded-full h-2">
-                                        <div 
-                                            className={`h-2 rounded-full ${
-                                                candidate.matchScore >= 80 ? 'bg-green-500' :
-                                                candidate.matchScore >= 60 ? 'bg-yellow-500' : 'bg-red-500'
-                                            }`} 
-                                            style={{ width: `${candidate.matchScore}%` }}
-                                        ></div>
+                                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Contact Intelligence</h3>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="text-[10px] text-slate-400 font-bold uppercase block mb-1">Electronic Mail</label>
+                                        <a href={`mailto:${candidate.email}`} className="text-sm font-semibold text-slate-700 dark:text-slate-200 hover:text-liberty-blue transition-colors flex items-center gap-2 group">
+                                            <i className="fas fa-envelope text-slate-300 group-hover:text-liberty-blue"></i> {candidate.email}
+                                        </a>
                                     </div>
-                                    <span className="font-bold text-slate-700 dark:text-slate-300">{candidate.matchScore}%</span>
+                                    <div>
+                                        <label className="text-[10px] text-slate-400 font-bold uppercase block mb-1">Phone Protocol</label>
+                                        <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+                                            <i className="fas fa-phone-alt text-slate-300"></i> {candidate.phone}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] text-slate-400 font-bold uppercase block mb-1">Match Index</label>
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                                                <div 
+                                                    className={`h-full rounded-full shadow-[0_0_5px_rgba(0,0,0,0.1)] ${
+                                                        candidate.matchScore >= 80 ? 'bg-emerald-500' :
+                                                        candidate.matchScore >= 60 ? 'bg-amber-500' : 'bg-rose-500'
+                                                    }`} 
+                                                    style={{ width: `${candidate.matchScore}%` }}
+                                                ></div>
+                                            </div>
+                                            <span className="text-xs font-black text-slate-900 dark:text-white">{candidate.matchScore}%</span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
 
-                        <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-700">
-                            <h3 className="font-bold text-slate-800 dark:text-white mb-4 text-sm uppercase tracking-wider">Actions</h3>
-                            <div className="grid grid-cols-2 gap-2">
-                                <button 
-                                    onClick={() => setShowResume(true)}
-                                    className="px-3 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded text-slate-600 dark:text-slate-200 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-600 hover:text-liberty-blue dark:hover:text-blue-400 transition-colors"
-                                >
-                                    <i className="fas fa-file-pdf mr-2"></i> Resume
-                                </button>
-                                <button className="px-3 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded text-slate-600 dark:text-slate-200 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-600 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                                    <i className="fab fa-linkedin mr-2"></i> LinkedIn
-                                </button>
-                                <button className="px-3 py-2 bg-liberty-blue text-white rounded text-sm font-medium hover:bg-liberty-light transition-colors col-span-2 shadow-sm">
-                                    <i className="fas fa-calendar-check mr-2"></i> Schedule Interview
-                                </button>
-                                {currentStatus !== 'rejected' && (
+                            <div>
+                                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Executive Actions</h3>
+                                <div className="grid grid-cols-1 gap-2">
                                     <button 
-                                        onClick={handleReject}
-                                        className="px-3 py-2 bg-red-50 text-red-600 border border-red-100 rounded text-sm font-medium hover:bg-red-100 transition-colors col-span-2 mt-2"
+                                        onClick={() => setShowResume(true)}
+                                        className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all flex items-center justify-center gap-2 shadow-sm"
                                     >
-                                        <i className="fas fa-ban mr-2"></i> Reject Candidate
+                                        <i className="fas fa-file-pdf text-rose-500"></i> View Artifact
                                     </button>
-                                )}
+                                    <button className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all flex items-center justify-center gap-2 shadow-sm">
+                                        <i className="fab fa-linkedin text-blue-600"></i> LinkedIn Profile
+                                    </button>
+                                    <button className="w-full px-4 py-4 bg-liberty-blue text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-liberty-light transition-all shadow-lg shadow-blue-900/20 mt-2">
+                                        Schedule Board
+                                    </button>
+                                    {currentStatus !== 'rejected' && (
+                                        <button 
+                                            onClick={handleReject}
+                                            className="w-full px-4 py-3 bg-rose-50 dark:bg-rose-900/20 text-rose-600 border border-rose-100 dark:border-rose-900/50 rounded-xl text-xs font-bold hover:bg-rose-100 transition-all mt-4"
+                                        >
+                                            Decline Pipeline
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Main Content Area */}
-                    <div className="flex-1 flex flex-col min-h-[400px]">
-                        {/* Tabs */}
-                        <div className="flex border-b border-slate-100 dark:border-slate-700 px-6 bg-white dark:bg-slate-800">
-                            <button
-                                onClick={() => setActiveTab('history')}
-                                className={`px-4 py-4 text-sm font-medium border-b-2 transition-colors ${
-                                    activeTab === 'history' ? 'border-liberty-blue text-liberty-blue dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-                                }`}
-                            >
-                                History
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('reviews')}
-                                className={`px-4 py-4 text-sm font-medium border-b-2 transition-colors ${
-                                    activeTab === 'reviews' ? 'border-liberty-blue text-liberty-blue dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-                                }`}
-                            >
-                                Reviews
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('ai_analysis')}
-                                className={`px-4 py-4 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
-                                    activeTab === 'ai_analysis' ? 'border-purple-500 text-purple-600 dark:text-purple-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-purple-500'
-                                }`}
-                            >
-                                <i className="fas fa-sparkles"></i> AI Insights
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('notes')}
-                                className={`px-4 py-4 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
-                                    activeTab === 'notes' ? 'border-liberty-blue text-liberty-blue dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-                                }`}
-                            >
-                                Notes
-                                <span className="bg-red-500 text-white text-[9px] px-1 rounded animate-pulse">LIVE</span>
-                            </button>
+                    {/* Main Workspace */}
+                    <div className="flex-1 flex flex-col min-h-0">
+                        {/* Tab Navigation */}
+                        <div className="flex gap-2 px-8 pt-4 bg-white dark:bg-[#0B1120] border-b border-slate-100 dark:border-slate-800 overflow-x-auto">
+                            {[
+                                { id: 'history', label: 'History', icon: 'fa-history' },
+                                { id: 'reviews', label: 'Reviews', icon: 'fa-star' },
+                                { id: 'ai_analysis', label: 'AI Insights', icon: 'fa-sparkles', premium: true },
+                                { id: 'interview_prep', label: 'Interview Prep', icon: 'fa-clipboard-question', premium: true },
+                                { id: 'notes', label: 'Collaborate', icon: 'fa-comments' }
+                            ].map(tab => (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id as any)}
+                                    className={`px-6 py-4 text-xs font-black uppercase tracking-[0.15em] border-b-2 transition-all flex items-center gap-3 whitespace-nowrap ${
+                                        activeTab === tab.id 
+                                            ? 'border-liberty-blue text-liberty-blue dark:text-blue-400' 
+                                            : 'border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
+                                    }`}
+                                >
+                                    <i className={`fas ${tab.icon} ${tab.premium && activeTab === tab.id ? 'text-purple-500 animate-pulse' : ''}`}></i>
+                                    {tab.label}
+                                    {tab.premium && <span className="text-[8px] bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400 px-1.5 py-0.5 rounded-full font-black">AI</span>}
+                                </button>
+                            ))}
                         </div>
 
-                        {/* Tab Content */}
-                        <div className="p-6 overflow-y-auto flex-1 bg-white dark:bg-slate-800">
+                        {/* Tab Viewport */}
+                        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
                             {activeTab === 'history' && (
-                                <div className="space-y-6">
+                                <div className="space-y-8 max-w-2xl">
                                     {candidate.history?.map((event, index) => (
-                                        <div key={event.id} className="flex gap-4 group">
-                                            <div className="flex flex-col items-center">
-                                                <div className="w-3 h-3 bg-liberty-blue dark:bg-blue-500 rounded-full ring-4 ring-blue-50 dark:ring-blue-900/30 group-hover:ring-blue-100 dark:group-hover:ring-blue-800 transition-shadow"></div>
-                                                {index !== (candidate.history?.length || 0) - 1 && <div className="w-0.5 h-full bg-slate-100 dark:bg-slate-700 my-1"></div>}
+                                        <div key={event.id} className="flex gap-6 group relative">
+                                            <div className="flex flex-col items-center shrink-0">
+                                                <div className="w-4 h-4 bg-liberty-blue rounded-full ring-4 ring-blue-50 dark:ring-blue-900/20 group-hover:scale-125 transition-transform"></div>
+                                                {index !== (candidate.history?.length || 0) - 1 && <div className="w-0.5 h-full bg-slate-100 dark:bg-slate-800 my-2"></div>}
                                             </div>
-                                            <div className="pb-6">
-                                                <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{event.action}</p>
-                                                <p className="text-xs text-slate-400 mb-1">{event.date}</p>
-                                                {event.description && <p className="text-sm text-slate-600 dark:text-slate-400">{event.description}</p>}
+                                            <div className="pb-8">
+                                                <p className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">{event.action}</p>
+                                                <p className="text-xs text-slate-400 mt-1 font-bold">{event.date}</p>
+                                                {event.description && <p className="text-sm text-slate-600 dark:text-slate-400 mt-3 leading-relaxed bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">{event.description}</p>}
                                             </div>
                                         </div>
                                     ))}
-                                    {(!candidate.history || candidate.history.length === 0) && (
-                                        <div className="text-center text-slate-400 py-8 italic">No history available</div>
-                                    )}
                                 </div>
                             )}
 
                             {activeTab === 'reviews' && (
-                                <div className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     {candidate.reviews?.map((review) => (
-                                        <div key={review.id} className="bg-slate-50 dark:bg-slate-700/50 p-4 rounded-lg border border-slate-100 dark:border-slate-700">
-                                            <div className="flex justify-between items-start mb-2">
-                                                <div className="flex items-center gap-2">
-                                                    <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-600 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300">
+                                        <div key={review.id} className="bg-white dark:bg-[#0B1120] p-6 rounded-[2rem] border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow">
+                                            <div className="flex justify-between items-start mb-6">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-sm font-black text-slate-500">
                                                         {review.reviewer.charAt(0)}
                                                     </div>
                                                     <div>
-                                                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{review.reviewer}</p>
-                                                        <p className="text-xs text-slate-400">{review.date}</p>
+                                                        <p className="text-sm font-black text-slate-900 dark:text-white">{review.reviewer}</p>
+                                                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">{review.date}</p>
                                                     </div>
                                                 </div>
-                                                <div className="flex text-yellow-400 text-xs">
+                                                <div className="flex text-amber-400 text-[10px]">
                                                     {[...Array(5)].map((_, i) => (
-                                                        <i key={i} className={`fas fa-star ${i < review.rating ? '' : 'text-slate-200 dark:text-slate-600'}`}></i>
+                                                        <i key={i} className={`fas fa-star ${i < review.rating ? '' : 'text-slate-200 dark:text-slate-800'}`}></i>
                                                     ))}
                                                 </div>
                                             </div>
-                                            <p className="text-sm text-slate-600 dark:text-slate-300 italic">"{review.comment}"</p>
+                                            <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed italic border-l-4 border-slate-100 dark:border-slate-800 pl-4">
+                                                "{review.comment}"
+                                            </p>
                                         </div>
                                     ))}
-                                    {(!candidate.reviews || candidate.reviews.length === 0) && (
-                                        <div className="text-center text-slate-400 py-8 italic">No reviews yet</div>
-                                    )}
                                 </div>
                             )}
 
                             {activeTab === 'ai_analysis' && (
-                                <div className="space-y-6">
-                                    <div className="flex justify-between items-center bg-slate-50 dark:bg-slate-700/50 p-4 rounded-xl border border-slate-100 dark:border-slate-700">
-                                        <div>
-                                            <h4 className="font-bold text-sm text-slate-800 dark:text-white">AI Screening Assistant</h4>
-                                            <p className="text-xs text-slate-500">Run a deep analysis of this profile against the role requirements.</p>
+                                <div className="space-y-8 animate-fade-in">
+                                    <div className={`p-8 rounded-[2.5rem] text-white shadow-xl relative overflow-hidden transition-colors duration-500 ${
+                                        analysisMode === 'deep' 
+                                            ? 'bg-gradient-to-br from-indigo-900 to-purple-900 shadow-purple-900/30' 
+                                            : 'bg-gradient-to-br from-indigo-600 to-purple-700 shadow-indigo-900/20'
+                                    }`}>
+                                        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
+                                        <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-8">
+                                            <div className="max-w-xl">
+                                                <h4 className="font-serif font-bold text-2xl mb-2 flex items-center gap-2">
+                                                    Gemini Fitting Intelligence
+                                                    {analysisMode === 'deep' && <span className="bg-purple-500/30 border border-purple-400/50 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider">Deep Audit</span>}
+                                                </h4>
+                                                <p className="text-indigo-100 text-sm leading-relaxed opacity-90 font-light">
+                                                    {analysisMode === 'deep' 
+                                                        ? "Thinking Mode engaged. Analyzing career trajectory, implicit skills, and cultural fit vectors." 
+                                                        : "Standard analysis active. Cross-referencing explicit artifacts with job specifications."}
+                                                </p>
+                                            </div>
+                                            <div className="flex flex-col gap-2 shrink-0">
+                                                <div className="flex bg-black/20 p-1 rounded-xl">
+                                                    <button 
+                                                        onClick={() => setAnalysisMode('fast')}
+                                                        className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${analysisMode === 'fast' ? 'bg-white text-indigo-700 shadow-sm' : 'text-indigo-200 hover:text-white'}`}
+                                                    >
+                                                        Fast
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => setAnalysisMode('deep')}
+                                                        className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${analysisMode === 'deep' ? 'bg-purple-500 text-white shadow-sm' : 'text-indigo-200 hover:text-white'}`}
+                                                    >
+                                                        Deep Audit
+                                                    </button>
+                                                </div>
+                                                <button 
+                                                    onClick={runAIAnalysis}
+                                                    disabled={isAnalyzing}
+                                                    className="px-8 py-3 bg-white text-indigo-900 rounded-xl text-xs font-black uppercase tracking-[0.2em] shadow-lg hover:bg-indigo-50 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                                                >
+                                                    {isAnalyzing ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-bolt-lightning"></i>}
+                                                    {isAnalyzing ? 'Thinking...' : 'Execute'}
+                                                </button>
+                                            </div>
                                         </div>
-                                        <button 
-                                            onClick={runAIAnalysis}
-                                            disabled={isAnalyzing}
-                                            className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg text-xs font-bold shadow-md hover:shadow-lg transition-all flex items-center gap-2 disabled:opacity-50"
-                                        >
-                                            {isAnalyzing ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-robot"></i>}
-                                            {isAnalyzing ? 'Analyzing...' : (aiAnalysis ? 'Re-run Analysis' : 'Trigger AI Analysis')}
-                                        </button>
                                     </div>
 
                                     {isAnalyzing ? (
-                                        <div className="flex flex-col items-center justify-center py-12">
-                                            <div className="w-12 h-12 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin mb-4"></div>
-                                            <p className="text-slate-500 dark:text-slate-400 font-medium">Processing profile with Gemini...</p>
+                                        <div className="flex flex-col items-center justify-center py-24 bg-slate-50 dark:bg-slate-800/20 rounded-[3rem] border-2 border-dashed border-slate-100 dark:border-slate-800">
+                                            <div className="w-16 h-16 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin mb-6"></div>
+                                            <h4 className="font-serif font-bold text-xl text-slate-800 dark:text-white">Neural Processing...</h4>
+                                            <p className="text-slate-400 text-sm mt-2 max-w-xs text-center font-light leading-relaxed">
+                                                {analysisMode === 'deep' ? "Simulating recruiter reasoning chains (Gemini Pro)..." : "Parsing semantic structures (Gemini Flash)..."}
+                                            </p>
                                         </div>
                                     ) : aiAnalysis ? (
-                                        <div className="animate-fade-in-up">
-                                            {/* Score Card */}
-                                            <div className="bg-gradient-to-r from-purple-50 to-white dark:from-purple-900/20 dark:to-slate-800 p-6 rounded-xl border border-purple-100 dark:border-purple-800 mb-6 flex items-center gap-6">
-                                                <div className="relative w-20 h-20 flex items-center justify-center">
-                                                    <svg className="w-full h-full transform -rotate-90">
-                                                        <circle cx="40" cy="40" r="36" className="text-purple-100 dark:text-purple-900" strokeWidth="8" fill="none" stroke="currentColor"/>
-                                                        <circle cx="40" cy="40" r="36" className="text-purple-600 dark:text-purple-400" strokeWidth="8" fill="none" stroke="currentColor" strokeDasharray={`${aiAnalysis.score * 2.26} 226`}/>
-                                                    </svg>
-                                                    <div className="absolute inset-0 flex items-center justify-center flex-col">
-                                                        <span className="text-2xl font-bold text-purple-700 dark:text-purple-300">{aiAnalysis.score}</span>
+                                        <div className="space-y-8 animate-fade-in-up">
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                                <div className="bg-white dark:bg-[#0B1120] p-8 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col items-center justify-center text-center">
+                                                    <div className="relative w-32 h-32 mb-4">
+                                                        <svg className="w-full h-full transform -rotate-90 drop-shadow-xl">
+                                                            <circle cx="64" cy="64" r="58" className="text-slate-100 dark:text-slate-800" strokeWidth="10" fill="none" stroke="currentColor"/>
+                                                            <circle cx="64" cy="64" r="58" className="text-indigo-600 dark:text-indigo-400" strokeWidth="10" fill="none" stroke="currentColor" strokeDasharray={`${aiAnalysis.score * 3.64} 364`} strokeLinecap="round"/>
+                                                        </svg>
+                                                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                                            <span className="text-4xl font-black text-indigo-700 dark:text-indigo-300">{aiAnalysis.score}</span>
+                                                            <span className="text-[8px] font-black uppercase text-slate-400 tracking-widest mt-1">Match Index</span>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                                <div>
-                                                    <h3 className="font-bold text-lg text-slate-800 dark:text-white mb-1">Gemini Fit Summary</h3>
-                                                    <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-                                                        {aiAnalysis.analysis}
+                                                
+                                                <div className="md:col-span-2 bg-white dark:bg-[#0B1120] p-8 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm">
+                                                    <h3 className="font-black text-slate-900 dark:text-white mb-4 flex items-center gap-3 text-xs uppercase tracking-[0.2em]">
+                                                        <i className="fas fa-file-contract text-indigo-500"></i> Decision Summary
+                                                    </h3>
+                                                    <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed font-light italic">
+                                                        "{aiAnalysis.analysis}"
                                                     </p>
                                                 </div>
                                             </div>
                                             
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                <div>
-                                                    <h4 className="font-bold text-slate-700 dark:text-slate-200 mb-3 text-xs uppercase tracking-wide flex items-center gap-2">
-                                                        <i className="fas fa-check-circle text-green-500"></i> Identified Strengths
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                                <div className="bg-emerald-50/20 dark:bg-emerald-900/10 p-8 rounded-[3rem] border border-emerald-100 dark:border-emerald-900/30">
+                                                    <h4 className="font-black text-emerald-700 dark:text-emerald-400 mb-6 text-[10px] uppercase tracking-[0.3em] flex items-center gap-3">
+                                                        <i className="fas fa-shield-check"></i> High-Affinity Markers
                                                     </h4>
-                                                    <ul className="space-y-2">
+                                                    <ul className="space-y-4">
                                                         {aiAnalysis.strengths?.map((s, i) => (
-                                                            <li key={i} className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300 bg-green-50 dark:bg-green-900/20 p-2 rounded-lg border border-green-100 dark:border-green-900/50">
-                                                                <span className="text-green-600 dark:text-green-400 font-bold">•</span> {s}
+                                                            <li key={i} className="flex items-start gap-4 text-sm text-slate-700 dark:text-slate-200">
+                                                                <span className="w-6 h-6 bg-emerald-100 dark:bg-emerald-800/50 rounded-lg flex items-center justify-center text-[10px] text-emerald-700 dark:text-emerald-400 shrink-0 font-black">{i+1}</span>
+                                                                <span className="font-light">{s}</span>
                                                             </li>
                                                         ))}
                                                     </ul>
                                                 </div>
-                                                <div>
-                                                    <h4 className="font-bold text-slate-700 dark:text-slate-200 mb-3 text-xs uppercase tracking-wide flex items-center gap-2">
-                                                        <i className="fas fa-exclamation-triangle text-amber-500"></i> Identified Gaps
+                                                
+                                                <div className="bg-rose-50/20 dark:bg-rose-900/10 p-8 rounded-[3rem] border border-rose-100 dark:border-rose-900/30">
+                                                    <h4 className="font-black text-rose-700 dark:text-rose-400 mb-6 text-[10px] uppercase tracking-[0.3em] flex items-center gap-3">
+                                                        <i className="fas fa-triangle-exclamation"></i> Identified Risk Deltas
                                                     </h4>
-                                                    <ul className="space-y-2">
+                                                    <ul className="space-y-4">
                                                         {aiAnalysis.weaknesses?.map((w, i) => (
-                                                            <li key={i} className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300 bg-amber-50 dark:bg-amber-900/20 p-2 rounded-lg border border-amber-100 dark:border-amber-800/50">
-                                                                <span className="text-amber-600 dark:text-amber-400 font-bold">•</span> {w}
+                                                            <li key={i} className="flex items-start gap-4 text-sm text-slate-700 dark:text-slate-200">
+                                                                <span className="w-6 h-6 bg-rose-100 dark:bg-rose-800/50 rounded-lg flex items-center justify-center text-[10px] text-rose-700 dark:text-rose-400 shrink-0 font-black">{i+1}</span>
+                                                                <span className="font-light">{w}</span>
                                                             </li>
                                                         ))}
                                                         {(!aiAnalysis.weaknesses || aiAnalysis.weaknesses.length === 0) && (
-                                                            <li className="text-sm text-slate-400 italic bg-slate-50 dark:bg-slate-700 p-2 rounded-lg">No significant gaps identified.</li>
+                                                            <li className="text-sm text-slate-400 italic py-4 font-light text-center">Neural Audit detected no high-priority risks.</li>
                                                         )}
                                                     </ul>
                                                 </div>
                                             </div>
                                         </div>
                                     ) : (
-                                        <div className="text-center py-10 text-slate-400 bg-slate-50 dark:bg-slate-700/30 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">
-                                            <i className="fas fa-magic text-3xl mb-3 opacity-30"></i>
-                                            <p className="text-sm">Click "Trigger AI Analysis" to get profile insights.</p>
+                                        <div className="text-center py-32 bg-slate-50/50 dark:bg-slate-800/20 rounded-[3rem] border-2 border-dashed border-slate-200 dark:border-slate-800">
+                                            <div className="w-20 h-20 bg-white dark:bg-slate-800 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-sm border border-slate-100 dark:border-slate-700">
+                                                <i className="fas fa-microchip text-4xl text-slate-200"></i>
+                                            </div>
+                                            <h4 className="font-serif font-bold text-xl text-slate-700 dark:text-slate-300">Neural Workspace Ready</h4>
+                                            <p className="text-slate-400 text-sm mt-2 max-w-xs mx-auto font-light">Invoke the Gemini Execute engine to perform a deep-scan analysis of this candidate's fit profile.</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {activeTab === 'interview_prep' && (
+                                <div className="space-y-8 animate-fade-in">
+                                    <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-[2.5rem] p-8 text-white shadow-xl relative overflow-hidden">
+                                        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
+                                        <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-8">
+                                            <div>
+                                                <h4 className="font-serif font-bold text-2xl mb-2 flex items-center gap-2">
+                                                    <i className="fas fa-clipboard-question"></i> Interview Generator
+                                                </h4>
+                                                <p className="text-blue-100 text-sm leading-relaxed opacity-90 font-light max-w-md">
+                                                    Generate a structured interview guide tailored to probe this candidate's specific weaknesses and experience gaps.
+                                                </p>
+                                            </div>
+                                            <button 
+                                                onClick={generateInterviewGuide}
+                                                disabled={isGeneratingQuestions}
+                                                className="px-8 py-3 bg-white text-blue-700 rounded-xl text-xs font-black uppercase tracking-[0.2em] shadow-lg hover:bg-blue-50 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                                            >
+                                                {isGeneratingQuestions ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-wand-magic-sparkles"></i>}
+                                                {isGeneratingQuestions ? 'Drafting...' : 'Generate Guide'}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {isGeneratingQuestions ? (
+                                        <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+                                            <i className="fas fa-pen-nib fa-spin text-3xl mb-4 text-blue-500"></i>
+                                            <p>Drafting personalized questions...</p>
+                                        </div>
+                                    ) : interviewQuestions.length > 0 ? (
+                                        <div className="grid gap-6">
+                                            {interviewQuestions.map((q, i) => (
+                                                <div key={i} className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow">
+                                                    <div className="flex justify-between items-start mb-4">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-[10px] font-bold uppercase">{q.category}</span>
+                                                            <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${
+                                                                q.difficulty === 'Hard' ? 'bg-red-100 text-red-700' : 
+                                                                q.difficulty === 'Medium' ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'
+                                                            }`}>{q.difficulty}</span>
+                                                        </div>
+                                                        <span className="text-slate-300 font-black text-2xl">0{i+1}</span>
+                                                    </div>
+                                                    <h5 className="font-bold text-slate-800 dark:text-white text-lg mb-3">{q.question}</h5>
+                                                    <div className="bg-slate-50 dark:bg-slate-700/30 p-4 rounded-xl border border-slate-100 dark:border-slate-700">
+                                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Recruiter Rationale</p>
+                                                        <p className="text-sm text-slate-600 dark:text-slate-300 italic">{q.rationale}</p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-20 text-slate-400 bg-slate-50 dark:bg-slate-900/20 rounded-[2rem] border-2 border-dashed border-slate-200 dark:border-slate-800">
+                                            <p>No interview guide generated yet.</p>
                                         </div>
                                     )}
                                 </div>
                             )}
 
                             {activeTab === 'notes' && (
-                                <div className="flex flex-col h-full">
-                                    <div className="mb-6">
+                                <div className="flex flex-col h-full max-w-4xl mx-auto">
+                                    <div className="mb-10 group bg-slate-50 dark:bg-slate-800/50 p-6 rounded-[2rem] border border-slate-100 dark:border-slate-800 focus-within:border-liberty-blue transition-all">
                                         <textarea
                                             value={newNote}
                                             onChange={(e) => setNewNote(e.target.value)}
-                                            placeholder="Type a real-time collaborative note..."
-                                            className="w-full p-3 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-liberty-blue/20 resize-none h-24 text-slate-800 dark:text-white transition-all shadow-sm"
+                                            placeholder="Capture shared intelligence..."
+                                            className="w-full p-4 bg-transparent rounded-2xl text-sm focus:outline-none resize-none h-32 text-slate-800 dark:text-white placeholder:text-slate-400 font-light leading-relaxed"
                                         ></textarea>
-                                        <div className="flex justify-end mt-2">
+                                        <div className="flex justify-end mt-4">
                                             <button 
                                                 onClick={handleAddNote}
-                                                className="px-4 py-2 bg-liberty-blue text-white rounded-lg text-sm font-medium hover:bg-liberty-light disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                                className="px-8 py-3 bg-liberty-blue text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-liberty-light disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg"
                                                 disabled={!newNote.trim()}
                                             >
-                                                <span>Add Note</span>
-                                                <i className="fas fa-paper-plane text-xs"></i>
+                                                Publish Note
                                             </button>
                                         </div>
                                     </div>
-                                    <div className="space-y-4 flex-1">
+                                    <div className="space-y-6">
                                         {candidate.notes?.map((note) => (
-                                            <div key={note.id} className="border-l-4 border-liberty-accent bg-slate-50 dark:bg-slate-700/50 p-3 rounded-r-lg animate-fade-in">
-                                                <div className="flex justify-between items-center mb-1">
-                                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{note.author}</span>
-                                                    <span className="text-[10px] text-slate-400 bg-white dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-100 dark:border-slate-600">{note.date}</span>
+                                            <div key={note.id} className="bg-white dark:bg-[#0B1120] p-6 rounded-3xl border border-slate-100 dark:border-slate-800 animate-fade-in group hover:shadow-lg transition-all">
+                                                <div className="flex justify-between items-center mb-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-[10px] font-black text-indigo-600 uppercase tracking-tighter">
+                                                            {note.author.charAt(0)}
+                                                        </div>
+                                                        <span className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">{note.author}</span>
+                                                    </div>
+                                                    <span className="text-[9px] text-slate-400 font-black uppercase tracking-widest">{note.date}</span>
                                                 </div>
-                                                <p className="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{note.text}</p>
+                                                <p className="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap font-light leading-relaxed pl-11">
+                                                    {note.text}
+                                                </p>
                                             </div>
                                         ))}
-                                        {(!candidate.notes || candidate.notes.length === 0) && (
-                                            <div className="text-center text-slate-400 py-8 italic">
-                                                <p className="mb-2">No notes added yet.</p>
-                                                <p className="text-xs opacity-70">Start typing to collaborate in real-time.</p>
-                                            </div>
-                                        )}
                                     </div>
                                 </div>
                             )}

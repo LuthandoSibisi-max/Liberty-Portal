@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { geminiService } from '../services/geminiService';
+import { geminiService, decodeAudioData } from '../services/geminiService';
 import { ChatMessage } from '../types';
 
 export const AIChatBot: React.FC = () => {
@@ -9,13 +9,13 @@ export const AIChatBot: React.FC = () => {
         {
             id: 'init',
             role: 'model',
-            text: 'Hi there! 👋 I\'m your Liberty Recruitment AI. I can analyze resumes, draft emails, or summarize market data. How can I assist?',
+            text: 'Hi there! 👋 I\'m your Liberty Recruitment AI. I can analyze resumes, map locations, or deep-reason through complex queries. How can I assist?',
             timestamp: new Date()
         }
     ]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [mode, setMode] = useState<'standard' | 'fast' | 'search' | 'pro'>('standard');
+    const [mode, setMode] = useState<'standard' | 'fast' | 'search' | 'pro' | 'maps'>('standard');
     const [isRecording, setIsRecording] = useState(false);
     const [isPlaying, setIsPlaying] = useState<string | null>(null); // Message ID currently playing
     
@@ -61,6 +61,7 @@ export const AIChatBot: React.FC = () => {
                 reader.onloadend = async () => {
                     const base64Audio = reader.result as string;
                     setIsLoading(true);
+                    // Fixed: transcribeAudio now exists in geminiService
                     const transcription = await geminiService.transcribeAudio(base64Audio);
                     setIsLoading(false);
                     setInput(transcription);
@@ -89,10 +90,12 @@ export const AIChatBot: React.FC = () => {
         setIsPlaying(messageId);
         
         try {
-            const audioBuffer = await geminiService.speak(text);
-            if (audioBuffer) {
+            // Fixed: speak now exists in geminiService and returns raw PCM bytes as Uint8Array
+            const audioBytes = await geminiService.speak(text);
+            if (audioBytes) {
                 const ctx = getAudioContext();
-                const decodedAudio = await ctx.decodeAudioData(audioBuffer);
+                // Fixed: Native decodeAudioData fails on raw PCM. Using custom helper from geminiService.
+                const decodedAudio = await decodeAudioData(audioBytes, ctx, 24000, 1);
                 const source = ctx.createBufferSource();
                 source.buffer = decodedAudio;
                 source.connect(ctx.destination);
@@ -124,6 +127,7 @@ export const AIChatBot: React.FC = () => {
         try {
             let responseText = '';
             let sources = undefined;
+            let isThinking = false;
 
             if (mode === 'fast') {
                 responseText = await geminiService.fastChat(userMsg.text);
@@ -131,8 +135,13 @@ export const AIChatBot: React.FC = () => {
                 const result = await geminiService.search(userMsg.text);
                 responseText = result.text;
                 sources = result.sources;
+            } else if (mode === 'maps') {
+                const result = await geminiService.mapQuery(userMsg.text);
+                responseText = result.text;
+                sources = result.sources;
             } else if (mode === 'pro') {
-                // Use Gemini 3 Pro
+                // Use Gemini 3 Pro with Thinking
+                isThinking = true;
                 responseText = await geminiService.proChat(userMsg.text);
             } else {
                 // Standard Flash
@@ -144,7 +153,7 @@ export const AIChatBot: React.FC = () => {
                 role: 'model',
                 text: responseText,
                 timestamp: new Date(),
-                isThinking: false, // Legacy field not needed for Pro chat unless streaming thought process
+                isThinking,
                 sources
             };
             setMessages(prev => [...prev, modelMsg]);
@@ -205,8 +214,9 @@ export const AIChatBot: React.FC = () => {
                             {[
                                 { id: 'standard', label: 'Chat', icon: 'fa-comment' },
                                 { id: 'fast', label: 'Fast', icon: 'fa-bolt' },
-                                { id: 'search', label: 'Web', icon: 'fa-globe' },
-                                { id: 'pro', label: 'Pro (Gemini 3)', icon: 'fa-brain' }
+                                { id: 'search', label: 'Search', icon: 'fa-globe' },
+                                { id: 'maps', label: 'Maps', icon: 'fa-map-location-dot' },
+                                { id: 'pro', label: 'Think', icon: 'fa-brain' }
                             ].map((m: any) => (
                                 <button
                                     key={m.id}
@@ -239,15 +249,16 @@ export const AIChatBot: React.FC = () => {
                                 }`}>
                                     {msg.isThinking && (
                                         <div className="text-xs text-purple-600 dark:text-purple-400 mb-2 font-bold uppercase tracking-wider flex items-center gap-1.5 border-b border-purple-100 dark:border-purple-900 pb-1">
-                                            <i className="fas fa-brain animate-pulse"></i> Reasoning
+                                            <i className="fas fa-brain animate-pulse"></i> Deep Reasoning
                                         </div>
                                     )}
                                     <div className="whitespace-pre-wrap leading-relaxed">{msg.text}</div>
                                     
+                                    {/* Sources Display (Search or Maps) */}
                                     {msg.sources && msg.sources.length > 0 && (
                                         <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-600">
                                             <p className="text-[9px] font-bold text-slate-400 dark:text-slate-500 mb-1.5 uppercase tracking-wider flex items-center gap-1">
-                                                <i className="fas fa-search text-blue-400"></i> Sources Verified
+                                                <i className="fas fa-check-circle text-green-500"></i> Grounded Sources
                                             </p>
                                             <ul className="space-y-1.5">
                                                 {msg.sources.map((source, idx) => (
@@ -256,7 +267,7 @@ export const AIChatBot: React.FC = () => {
                                                             <div className="w-4 h-4 bg-white dark:bg-slate-500 rounded flex items-center justify-center shadow-sm text-[8px] text-blue-500 dark:text-blue-300 font-bold border border-slate-100 dark:border-slate-400">
                                                                 {idx + 1}
                                                             </div>
-                                                            <span className="truncate flex-1 group-hover:text-blue-600 dark:group-hover:text-blue-300 font-medium">{source.title || 'Web Source'}</span>
+                                                            <span className="truncate flex-1 group-hover:text-blue-600 dark:group-hover:text-blue-300 font-medium">{source.title || 'Source Link'}</span>
                                                             <i className="fas fa-external-link-alt text-[9px] text-slate-300 dark:text-slate-400 group-hover:text-blue-400"></i>
                                                         </a>
                                                     </li>
@@ -289,6 +300,7 @@ export const AIChatBot: React.FC = () => {
                                         <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce delay-100"></div>
                                         <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce delay-200"></div>
                                     </div>
+                                    {mode === 'pro' && <div className="text-[10px] text-purple-400 mt-1 font-medium animate-pulse">Thinking...</div>}
                                 </div>
                             </div>
                         )}
@@ -299,7 +311,7 @@ export const AIChatBot: React.FC = () => {
                     {messages.length < 3 && !isLoading && (
                         <div className="px-5 pb-2 bg-slate-50 dark:bg-slate-900/50">
                             <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2">
-                                {['Draft outreach email', 'Analyze market trends', 'Screen candidate'].map(s => (
+                                {['Draft outreach email', 'Map nearby Liberty offices', 'Screen candidate with deep thinking'].map(s => (
                                     <button 
                                         key={s} 
                                         onClick={() => handleSuggestion(s)}
@@ -332,16 +344,20 @@ export const AIChatBot: React.FC = () => {
                                 type="text"
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
-                                placeholder={isRecording ? "Listening..." : "Ask Gemini..."}
+                                placeholder={isRecording ? "Listening..." : mode === 'maps' ? "Find location..." : "Ask Gemini..."}
                                 className="flex-1 bg-slate-50 dark:bg-slate-700 border-0 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-liberty-blue/20 dark:focus:ring-blue-500/20 text-slate-800 dark:text-white placeholder:text-slate-400 font-medium"
                                 disabled={isRecording}
                             />
                             <button 
                                 type="submit" 
                                 disabled={!input.trim() || isLoading || isRecording}
-                                className="h-10 w-10 bg-liberty-blue text-white rounded-xl flex items-center justify-center hover:bg-liberty-light disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg active:scale-95"
+                                className={`h-10 w-10 text-white rounded-xl flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg active:scale-95 ${
+                                    mode === 'pro' ? 'bg-gradient-to-r from-purple-600 to-indigo-600' : 
+                                    mode === 'maps' ? 'bg-gradient-to-r from-green-500 to-teal-500' :
+                                    'bg-liberty-blue hover:bg-liberty-light'
+                                }`}
                             >
-                                <i className="fas fa-paper-plane text-xs"></i>
+                                <i className={`fas ${mode === 'pro' ? 'fa-brain' : 'fa-paper-plane'} text-xs`}></i>
                             </button>
                         </div>
                     </form>
